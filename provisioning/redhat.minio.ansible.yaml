@@ -1,0 +1,164 @@
+## Will install the minIO environment at RedHat Linux.
+## Must have: sudo yum install ansible
+
+## to run: ansible-playbook redhat.minio.ansible.yaml
+
+## /usr/local/bin/minio server $MINIO_OPTS $MINIO_VOLUMES
+## https://techviewleo.com/deploy-minio-storage-server-on-debian/
+
+-   name: RedHat Linux Playbook
+    become: false
+    hosts: localhost
+
+    post_tasks:
+        - name: Get minio version
+          command: minio --version
+          register: minioversion
+        - debug: msg="{{ minioversion.stdout }}"
+
+        # Install MinIO client.
+        - name: Download Minio Client
+          become: true
+          get_url:
+            url: https://dl.minio.io/client/mc/release/linux-amd64/mc
+            dest: /usr/local/bin/mc
+          tags:
+            - minio
+
+        - name: Chmod Minio Client
+          become: true
+          file:
+            path: /usr/local/bin/mc
+            state: touch
+            mode: +x
+          tags:
+            - minio
+
+        - name: Register Minio as Alias using the installed client.
+          command: mc config host add minio http://127.0.0.1:9000 admin Eqcu3%#Gq6NV
+
+
+
+    pre_tasks:
+        - name: Full system upgrade
+          become: true
+          yum:
+            update_cache: yes
+            state: latest
+            name: '*'
+
+        - name: Create minio group if it does not exists.
+          become: true
+          group:
+            name: minio-user
+            state: present
+
+        - name: Create minio user if it does not exists.
+          become: true
+          user:
+            name: minio-user
+            state: present
+            groups: minio-user
+            shell: /sbin/nologin
+            append: yes
+            force: true
+
+    tasks:
+        ## Install the MinIO SERVER and start/enable it at linux.
+        - name: Download Minio
+          become: true
+          get_url:
+            url: https://dl.min.io/server/minio/release/linux-amd64/minio
+            dest: /usr/local/bin/minio
+          tags:
+            - minio
+
+        - name: Download Minio Service System.d
+          become: true
+          get_url:
+            url: https://raw.githubusercontent.com/minio/minio-service/master/linux-systemd/minio.service
+            dest: /etc/systemd/system
+          tags:
+            - minio
+
+        - name: CHMOD Minio
+          become: true
+          file:
+            path: /usr/local/bin/minio
+            state: touch
+            mode: +x
+          tags:
+            - minio
+
+        - name: Change ownership of minio file
+          become: true
+          ansible.builtin.file:
+            path: /usr/local/bin/minio
+            owner: minio-user
+            group: minio-user
+          tags:
+            - minio
+
+        - name: Creates file repo for minio
+          file:
+            path: /workspace/minio/data
+            state: directory
+          tags:
+            - minio
+        - name: Change owner for new minio file repo
+          become: true
+          ansible.builtin.file:
+            path: /workspace/minio/data
+            state: directory
+            recurse: yes
+            owner: minio-user
+            group: minio-user
+          tags:
+            - minio
+
+        - name: Creates directory for minio config
+          file:
+            path: /etc/minio/
+            state: directory
+          tags:
+            - minio
+
+        - name: Change owner for directory for minio config
+          become: true
+          ansible.builtin.file:
+            path: /etc/minio/
+            state: directory
+            recurse: yes
+            owner: minio-user
+            group: minio-user
+          tags:
+            - minio
+
+        - name: Creating a file with content
+          become: true
+          copy:
+            dest: "/etc/default/minio"
+            content: |
+                MINIO_VOLUMES="/workspace/minio/data"
+                MINIO_ROOT_USER="admin"
+                MINIO_ROOT_PASSWORD="Eqcu3%#Gq6NV"
+                MINIO_PROMETHEUS_AUTH_TYPE=public
+                MINIO_CACHE="on"
+          tags:
+            - minio
+
+        - name: Just force systemd to reread configs.
+          become: true
+          ansible.builtin.systemd:
+            daemon_reload: true
+          tags:
+            - minio
+
+        - name: Enable Minio Service
+          become: true
+          ansible.builtin.systemd:
+            name: minio.service
+            state: started
+            enabled: true
+          tags:
+            - minio
