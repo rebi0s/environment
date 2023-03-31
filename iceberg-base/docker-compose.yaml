@@ -13,6 +13,7 @@ services:
             - "5420:5432"
     pgAdmin:
         image: dpage/pgadmin4
+        user: root
         restart: unless-stopped
         container_name: rebios-pgadmin
         environment:
@@ -22,6 +23,6 @@ services:
         volumes:
             - ../../iceberg/pgadmin/var:/var/lib/pgadmin
         ports:
-            - 9080:80
+            - 9220:80
         depends_on:
             - postgres
