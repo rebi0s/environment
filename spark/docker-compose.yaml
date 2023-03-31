@@ -1,11 +1,15 @@
 version: "3.7"
-  services:
-    spark:
-      build:
-        context: .
-        dockerfile: spark.dockerfile
-
-
-
-
-        ../../spark:/opt/spark/
+services:
+  spark:
+    container_name: spark
+    user: root
+    build:
+      context: ./docker/.
+      dockerfile: spark.dockerfile
+    ports:
+      - 9080:8080
+      - 7077:7077
+    restart: always
+    volumes:
+        - ../../spark/logs:/opt/spark/logs
+        - ../../spark/spark-events:/workspace/spark-events

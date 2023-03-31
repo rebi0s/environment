@@ -11,3 +11,17 @@ services:
             - ../../iceberg/postgres/data:/var/lib/postgresql/data
         ports:
             - "5420:5432"
+    pgAdmin:
+        image: dpage/pgadmin4
+        restart: unless-stopped
+        container_name: rebios-pgadmin
+        environment:
+            PGADMIN_DEFAULT_EMAIL: pgadmin4@pgadmin.org
+            PGADMIN_DEFAULT_PASSWORD: admin
+            GUNICORN_ACCESS_LOGFILE: /dev/null
+        volumes:
+            - ../../iceberg/pgadmin/var:/var/lib/pgadmin
+        ports:
+            - 9080:80
+        depends_on:
+            - postgres
