@@ -37,7 +37,8 @@
         - name: Register Minio as Alias using the installed client.
           command: mc config host add minio http://127.0.0.1:9000 admin Eqcu3%#Gq6NV
 
-
+        - name: Creating the BIOS bucket at Minio
+          command: mc mb minio/bios
 
     pre_tasks:
         - name: Full system upgrade
