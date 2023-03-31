@@ -1,0 +1,11 @@
+version: "3.7"
+  services:
+    spark:
+      build:
+        context: .
+        dockerfile: spark.dockerfile
+
+
+
+
+        ../../spark:/opt/spark/
