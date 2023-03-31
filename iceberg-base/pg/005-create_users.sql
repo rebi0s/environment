@@ -1,0 +1,1 @@
+CREATE ROLE icbergcat LOGIN PASSWORD ')&hNXz?3}5UBRcAC';

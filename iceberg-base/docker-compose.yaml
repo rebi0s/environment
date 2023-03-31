@@ -1,0 +1,13 @@
+version: "3.7"
+services:
+    postgres:
+        build:
+            context: .
+            dockerfile: postgres.dockerfile
+        container_name: iceberg_postgres_db
+        environment:
+            - POSTGRES_PASSWORD=23mJzsfUfUJqujYc!
+        volumes:
+            - ../../iceberg/postgres/data:/var/lib/postgresql/data
+        ports:
+            - "5420:5432"
