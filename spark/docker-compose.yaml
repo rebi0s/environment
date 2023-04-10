@@ -1,15 +1,75 @@
 version: "3.7"
 services:
-  spark:
-    container_name: spark
-    user: root
-    build:
-      context: ./docker/.
-      dockerfile: spark.dockerfile
-    ports:
-      - 9080:8080
-      - 7077:7077
-    restart: always
-    volumes:
-        - ../../spark/logs:/opt/spark/logs
-        - ../../spark/spark-events:/workspace/spark-events
+    spark-master:
+        container_name: spark_master
+        build:
+            context: ./docker/.
+            dockerfile: spark.dockerfile
+        ports:
+            - 9090:8080
+            - 7077:7077
+        restart: always
+        volumes:
+            - ../../spark/master/apps:/opt/spark-apps
+            - ../../spark/master/data:/opt/spark-data
+            - ../../spark/master/logs:/opt/spark/logs
+            - ../../spark/master/spark-events:/workspace/spark-events
+        environment:
+            - SPARK_LOCAL_IP=spark-master
+            - SPARK_WORKLOAD=master
+        extra_hosts:
+            - host.docker.internal:host-gateway
+
+    spark-worker-a:
+        container_name: spark_worker_a
+        build:
+            context: ./docker/.
+            dockerfile: spark.dockerfile
+        ports:
+            - 9091:8080
+            - 7000:7000
+        depends_on:
+            - spark-master
+        environment:
+            - SPARK_MASTER=spark://spark-master:7077
+            - SPARK_WORKER_CORES=1
+            - SPARK_WORKER_MEMORY=1G
+            - SPARK_DRIVER_MEMORY=1G
+            - SPARK_EXECUTOR_MEMORY=1G
+            - SPARK_WORKLOAD=worker
+            - SPARK_LOCAL_IP=spark-worker-a
+        restart: always
+        extra_hosts:
+            - host.docker.internal:host-gateway
+        volumes:
+            - ../../spark/spark-worker-a/apps:/opt/spark-apps
+            - ../../spark/spark-worker-a/data:/opt/spark-data
+            - ../../spark/spark-worker-a/logs:/opt/spark/logs
+            - ../../spark/spark-worker-a/spark-events:/workspace/spark-events
+
+    spark-worker-b:
+        container_name: spark_worker_b
+        build:
+            context: ./docker/.
+            dockerfile: spark.dockerfile
+        ports:
+            - 9092:8080
+            - 7001:7000
+        depends_on:
+            - spark-master
+        environment:
+            - SPARK_MASTER=spark://spark-master:7077
+            - SPARK_WORKER_CORES=1
+            - SPARK_WORKER_MEMORY=1G
+            - SPARK_DRIVER_MEMORY=1G
+            - SPARK_EXECUTOR_MEMORY=1G
+            - SPARK_WORKLOAD=worker
+            - SPARK_LOCAL_IP=spark-worker-b
+        restart: always
+        extra_hosts:
+            - host.docker.internal:host-gateway
+        volumes:
+            - ../../spark/spark-worker-b/apps:/opt/spark-apps
+            - ../../spark/spark-worker-b/data:/opt/spark-data
+            - ../../spark/spark-worker-b/logs:/opt/spark/logs
+            - ../../spark/spark-worker-b/spark-events:/workspace/spark-events
