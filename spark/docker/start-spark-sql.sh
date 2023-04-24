@@ -31,10 +31,14 @@ spark-sql --packages $DEPENDENCIES \
     --conf spark.history.fs.logDirectory= /workspace/spark-events \
     --conf spark.sql.catalogImplementation=in-memory
 
-#   CREATE TABLE bios.my_table2 (
+#   CREATE TABLE bios.table_01 (
 #          id bigint,
 #          data string,
 #          category string)
 #   USING iceberg
-#   LOCATION 's3://bios'
 #   PARTITIONED BY (category);
+
+
+
+#CREATE TABLE bios.table_01 (id bigint, data string, category string) USING iceberg PARTITIONED BY (category);
+#INSERT INTO bios.table_01 VALUES (1, 'Testando meus dados', 'teste');
