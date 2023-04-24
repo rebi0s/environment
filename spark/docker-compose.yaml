@@ -1,5 +1,18 @@
 version: "3.7"
 services:
+    spark-thrift:
+        container_name: spark_thrift_server
+        build:
+            context: ./docker/.
+            dockerfile: spark.thrift.dockerfile
+        ports:
+            - 10000:10000
+        restart: always
+        depends_on:
+            - spark-master
+        extra_hosts:
+            - host.docker.internal:host-gateway
+
     spark-master:
         container_name: spark_master
         build:
