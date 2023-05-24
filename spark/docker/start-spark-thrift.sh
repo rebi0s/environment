@@ -57,3 +57,7 @@ start-thriftserver.sh --packages $DEPENDENCIES \
     #--conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider \
     #--conf spark.hadoop.fs.s3a.access.key=$key \
     #--conf spark.hadoop.fs.s3a.secret.key=$secret \
+
+
+#beeline
+#!connect jdbc:hive2://localhost:10000
