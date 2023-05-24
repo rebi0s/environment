@@ -44,7 +44,7 @@ ENV SPARK_MASTER_LOG=$SPARK_LOG_DIR/spark-master.out \
     SPARK_MASTER="spark://spark-master:7077" \
     SPARK_WORKLOAD="master"
 
-EXPOSE 8080 7077 6066
+EXPOSE 8080 7077 6066 10000
 
 RUN mkdir -p $SPARK_LOG_DIR && \
     touch $SPARK_MASTER_LOG && \
@@ -54,7 +54,13 @@ RUN mkdir -p $SPARK_LOG_DIR && \
 
 COPY start-spark.sh /
 
+COPY start-spark-thrift.sh /
+
+COPY start-pyspark.sh /
+
 RUN chmod +x /start-spark.sh
+RUN chmod +x /start-spark-thrift.sh
+RUN chmod +x /start-pyspark.sh
 
 CMD ["/bin/bash", "/start-spark.sh"]
 
@@ -66,13 +72,21 @@ WORKDIR /opt/spark
 ENV PATH=$PATH:/opt/spark/bin:/opt/spark/sbin
 
 ##SPARK-SQL will work at minio simulating AWS S3
-ENV DEPENDENCIES="org.postgresql:postgresql:42.6.0,org.apache.iceberg:iceberg-spark-runtime-3.2_2.12:0.13.1,org.apache.iceberg:iceberg-hive-runtime:0.13.1,org.apache.logging.log4j:log4j-core:2.11.2" \
-    AWS_SDK_VERSION=2.20.35 \
+ENV DEPENDENCIES="org.postgresql:postgresql:42.6.0\
+,org.apache.iceberg:iceberg-spark-runtime-3.2_2.12:1.2.1\
+,org.apache.iceberg:iceberg-hive-runtime:1.2.1\
+,org.apache.iceberg:iceberg-hive-metastore:1.2.1\
+,org.apache.logging.log4j:log4j-core:2.11.2\
+,org.slf4j:slf4j-simple:2.0.7"\
+    AWS_SDK_VERSION=2.20.18 \
     AWS_MAVEN_GROUP=software.amazon.awssdk \
     AWS_ACCESS_KEY_ID=admin \
     AWS_SECRET_ACCESS_KEY=Eqcu3%#Gq6NV \
-    AWS_REGION=us-east-1
+    AWS_REGION=us-east-1 \
+    IP=127.0.0.1 \
+    PORT=10000
 
 RUN mkdir -p /workspace/spark-events | true
 
 COPY start-spark-sql.sh /
+RUN chmod +x /start-spark-sql.sh

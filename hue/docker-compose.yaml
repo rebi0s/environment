@@ -1,0 +1,12 @@
+version: "3.7"
+services:
+    hue:
+        image: gethue/hue:latest
+        container_name: hue_server
+        ports:
+            - "8888:8888"
+        volumes:
+            - ./config/hue.ini:/usr/share/hue/desktop/conf/hue.ini
+            - ./config/log.conf:/etc/hue/conf/log.conf
+        extra_hosts:
+            - host.docker.internal:host-gateway
