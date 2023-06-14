@@ -2,14 +2,12 @@
 #!/bin/bash
 . "/opt/spark/bin/load-spark-env.sh"
 
-/start-spark-thrift.sh
-
 # When the spark work_load is master run class org.apache.spark.deploy.master.Master
 if [ "$SPARK_WORKLOAD" == "master" ];
 then
 
 export SPARK_MASTER_HOST=`hostname`
-
+/start-spark-thrift.sh
 cd /opt/spark/bin && ./spark-class org.apache.spark.deploy.master.Master --ip $SPARK_MASTER_HOST --port $SPARK_MASTER_PORT --webui-port $SPARK_MASTER_WEBUI_PORT >> $SPARK_MASTER_LOG
 
 elif [ "$SPARK_WORKLOAD" == "worker" ];

@@ -4,7 +4,7 @@ RUN apt-get update && \
     apt-get install -y curl \
     vim \
     wget \
-    scala \
+#    scala \
     software-properties-common \
     ssh net-tools \
     ca-certificates \
@@ -18,15 +18,23 @@ RUN apt-get update && \
 
 RUN update-alternatives --install "/usr/bin/python" "python" "$(which python3)" 1
 
-ENV SPARK_VERSION=3.2.3 \
-    HADOOP_VERSION=3.2 \
+ENV SPARK_VERSION=3.4.0 \
+    HADOOP_VERSION=3 \
+    SCALA_VERSION=2.13 \
     SPARK_HOME=/opt/spark \
     PYTHONHASHSEED=1
 
-RUN wget --no-verbose -O apache-spark.tgz "https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz" \
+RUN wget --no-verbose -O apache-spark.tgz "https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala${SCALA_VERSION}.tgz" \
+    && wget https://mirrors.estointernet.in/apache/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz \
+    && tar -xvf apache-maven-3.6.3-bin.tar.gz \
+    && mv apache-maven-3.6.3 /opt/ \
     && mkdir -p /opt/spark \
     && tar -xf apache-spark.tgz -C /opt/spark --strip-components=1 \
     && rm apache-spark.tgz
+
+ENV M2_HOME='/opt/apache-maven-3.6.3' \
+    PATH="/opt/apache-maven-3.6.3/bin:$PATH"
+
 
 # Apache spark with Iceberger environment
 FROM apache-base as apache-spark
@@ -73,10 +81,10 @@ ENV PATH=$PATH:/opt/spark/bin:/opt/spark/sbin
 
 ##SPARK-SQL will work at minio simulating AWS S3
 ENV DEPENDENCIES="org.postgresql:postgresql:42.6.0\
-,org.apache.iceberg:iceberg-spark-runtime-3.2_2.12:1.2.1\
-,org.apache.iceberg:iceberg-hive-runtime:1.2.1\
-,org.apache.iceberg:iceberg-hive-metastore:1.2.1\
-,org.apache.logging.log4j:log4j-core:2.11.2\
+,org.apache.iceberg:iceberg-bundled-guava:1.3.0\
+,org.apache.iceberg:iceberg-spark-runtime-3.4_2.13:1.3.0\
+,org.apache.iceberg:iceberg-hive-runtime:1.3.0\
+,org.apache.iceberg:iceberg-hive-metastore:1.3.0\
 ,org.slf4j:slf4j-simple:2.0.7"\
     AWS_SDK_VERSION=2.20.18 \
     AWS_MAVEN_GROUP=software.amazon.awssdk \
@@ -89,4 +97,9 @@ ENV DEPENDENCIES="org.postgresql:postgresql:42.6.0\
 RUN mkdir -p /workspace/spark-events | true
 
 COPY start-spark-sql.sh /
+COPY run-maven.sh /
+
+RUN chmod +x /run-maven.sh
 RUN chmod +x /start-spark-sql.sh
+
+RUN /run-maven.sh
