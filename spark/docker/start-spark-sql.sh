@@ -42,5 +42,5 @@ spark-sql --packages $DEPENDENCIES \
 
 
 
-#CREATE TABLE bios.table_01 (id bigint, data string, category string) USING iceberg PARTITIONED BY (category);
-#INSERT INTO bios.table_01 VALUES (1, 'Testando meus dados', 'teste');
+#CREATE TABLE bios.tabela_particionada01 (id bigint, data string, category string) USING iceberg PARTITIONED BY (category);
+#INSERT INTO bios.tabela_particionada01 VALUES (1, 'Testando meus dados', 'teste');
