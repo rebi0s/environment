@@ -4,7 +4,6 @@ RUN apt-get update && \
     apt-get install -y curl \
     vim \
     wget \
-#    scala \
     software-properties-common \
     ssh net-tools \
     ca-certificates \
@@ -36,6 +35,7 @@ ENV M2_HOME='/opt/apache-maven-3.6.3' \
     PATH="/opt/apache-maven-3.6.3/bin:$PATH"
 
 
+#############
 # Apache spark with Iceberger environment
 FROM apache-base as apache-spark
 
@@ -72,12 +72,16 @@ RUN chmod +x /start-pyspark.sh
 
 CMD ["/bin/bash", "/start-spark.sh"]
 
+################
 
 FROM apache-spark as spark-sql-iceberg
 
 WORKDIR /opt/spark
 
 ENV PATH=$PATH:/opt/spark/bin:/opt/spark/sbin
+
+RUN echo "spark.executor.memory         4g" > /opt/spark/conf/spark-defaults.conf && \
+    echo "spark.driver.maxResultSize	0" >> /opt/spark/conf/spark-defaults.conf
 
 ##SPARK-SQL will work at minio simulating AWS S3
 ENV DEPENDENCIES="org.postgresql:postgresql:42.6.0\
@@ -86,7 +90,7 @@ ENV DEPENDENCIES="org.postgresql:postgresql:42.6.0\
 ,org.apache.iceberg:iceberg-hive-runtime:1.3.0\
 ,org.apache.iceberg:iceberg-hive-metastore:1.3.0\
 ,org.slf4j:slf4j-simple:2.0.7"\
-    AWS_SDK_VERSION=2.20.18 \
+    AWS_SDK_VERSION=2.20.101 \
     AWS_MAVEN_GROUP=software.amazon.awssdk \
     AWS_ACCESS_KEY_ID=admin \
     AWS_SECRET_ACCESS_KEY=Eqcu3%#Gq6NV \
