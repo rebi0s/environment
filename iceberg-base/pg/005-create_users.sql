@@ -1,1 +1,2 @@
 CREATE ROLE icbergcat LOGIN PASSWORD 'hNXz35UBRcAC';
+CREATE ROLE huerole LOGIN PASSWORD 'zahjo1poJeer';

@@ -5,8 +5,7 @@
   tasks:
     - name: set mydistribution
       ansible.builtin.set_fact:
-              #mydistribution: "{{ 'rhel' if (ansible_distribution == 'Red Hat Enterprise Linux') else (ansible_distribution | lower) }}"
-        mydistribution: centos
+        mydistribution: "{{ 'rhel' if (ansible_distribution == 'Red Hat Enterprise Linux') else (ansible_distribution | lower) }}"
 
     - name: Add signing key
       ansible.builtin.rpm_key:

@@ -1,0 +1,26 @@
+[notebook]
+[[interpreters]]
+
+[[[sparksql-alchemy]]]
+name=SparkSql (via SqlAlchemy)
+interface=sqlalchemy
+options='{"url": "hive://host.docker.internal:10000/default"}'
+
+[[[sparksql]]]
+# Must be named 'sparksql', hostname and more options are
+# in the 'spark' section
+name=SparkSql (via ThriftServer)
+interface=hiveserver2
+
+[spark]
+sql_server_host=host.docker.internal
+sql_server_port=10000
+
+[desktop]
+[[databases]]
+name=db_hue
+engine=postgresql_psycopg2
+host=host.docker.internal
+port=5432
+user=huerole
+password=zahjo1poJeer
