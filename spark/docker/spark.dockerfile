@@ -4,7 +4,6 @@ RUN apt-get update && \
     apt-get install -y curl \
     vim \
     wget \
-#    scala \
     software-properties-common \
     ssh net-tools \
     ca-certificates \
@@ -78,6 +77,10 @@ FROM apache-spark as spark-sql-iceberg
 WORKDIR /opt/spark
 
 ENV PATH=$PATH:/opt/spark/bin:/opt/spark/sbin
+
+RUN echo "spark.executor.memory         4g" > /opt/spark/conf/spark-defaults.conf && \
+    echo "spark.driver.maxResultSize	0" >> /opt/spark/conf/spark-defaults.conf
+
 
 ##SPARK-SQL will work at minio simulating AWS S3
 ENV DEPENDENCIES="org.postgresql:postgresql:42.6.0\

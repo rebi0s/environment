@@ -11,10 +11,6 @@ done
 
 export S3IP=$(cat /etc/hosts | grep host.docker.internal | awk '{print $1}')
 
-## ONLY FOR MY LOCAL TEST ! REMOVE IT !
-export AWS_SECRET_ACCESS_KEY=@Senha01
-## REMOVE HERE ....
-
 start-thriftserver.sh --packages $DEPENDENCIES \
     --conf iceberg.engine.hive.enabled=true \
     --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \

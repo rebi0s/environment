@@ -17,6 +17,7 @@
         - debug: msg="{{ minioversion.stdout }}"
 
         # Install MinIO client.
+
         - name: Download Minio Client
           become: true
           get_url:
@@ -101,11 +102,13 @@
             - minio
 
         - name: Creates file repo for minio
+          become: true
           file:
             path: /workspace/minio/data
             state: directory
           tags:
             - minio
+
         - name: Change owner for new minio file repo
           become: true
           ansible.builtin.file:
@@ -118,6 +121,7 @@
             - minio
 
         - name: Creates directory for minio config
+          become: true
           file:
             path: /etc/minio/
             state: directory
