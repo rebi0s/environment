@@ -1,6 +1,7 @@
 version: "3.7"
 services:
     hue:
+        platform: linux/amd64
         image: gethue/hue:latest
         container_name: hue_server
         ports:

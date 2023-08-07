@@ -85,12 +85,16 @@ RUN echo "spark.executor.memory         4g" > /opt/spark/conf/spark-defaults.con
 
 ##SPARK-SQL will work at minio simulating AWS S3
 ENV DEPENDENCIES="org.postgresql:postgresql:42.6.0\
-,org.apache.iceberg:iceberg-bundled-guava:1.3.0\
-,org.apache.iceberg:iceberg-spark-runtime-3.4_2.13:1.3.0\
-,org.apache.iceberg:iceberg-hive-runtime:1.3.0\
-,org.apache.iceberg:iceberg-hive-metastore:1.3.0\
+,org.apache.iceberg:iceberg-bundled-guava:1.3.1\
+,org.apache.iceberg:iceberg-core:1.3.1\
+,org.apache.iceberg:iceberg-aws:1.3.1\
+,org.apache.iceberg:iceberg-spark:1.3.1\
+,org.apache.iceberg:iceberg-spark-runtime-3.4_2.13:1.3.1\
+,org.apache.iceberg:iceberg-spark-extensions-3.4_2.13:1.3.1\
+,org.apache.iceberg:iceberg-hive-runtime:1.3.1\
+,org.apache.iceberg:iceberg-hive-metastore:1.3.1\
 ,org.slf4j:slf4j-simple:2.0.7"\
-    AWS_SDK_VERSION=2.20.101 \
+    AWS_SDK_VERSION=2.20.120 \
     AWS_MAVEN_GROUP=software.amazon.awssdk \
     AWS_ACCESS_KEY_ID=admin \
     AWS_SECRET_ACCESS_KEY=Eqcu3%#Gq6NV \

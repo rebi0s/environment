@@ -1,14 +1,14 @@
 
 #!/bin/bash
 
-export AWS_PACKAGES=(
-  "bundle"
-  "url-connection-client"
-)
+# export AWS_PACKAGES=(
+#   "bundle"
+#   "url-connection-client"
+# )
 
-for pkg in "${AWS_PACKAGES[@]}"; do
-    export DEPENDENCIES+=",$AWS_MAVEN_GROUP:$pkg:$AWS_SDK_VERSION"
-done
+# for pkg in "${AWS_PACKAGES[@]}"; do
+#     export DEPENDENCIES+=",$AWS_MAVEN_GROUP:$pkg:$AWS_SDK_VERSION"
+# done
 
 export S3IP=$(cat /etc/hosts | grep host.docker.internal | awk '{print $1}')
 

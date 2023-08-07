@@ -1,5 +1,4 @@
 #!/bin/bash
-
 export AWS_PACKAGES=(
   "bundle"
   "url-connection-client"
