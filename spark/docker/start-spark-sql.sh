@@ -13,6 +13,7 @@
 export S3IP=$(cat /etc/hosts | grep host.docker.internal | awk '{print $1}')
 
 spark-sql --packages $DEPENDENCIES \
+    --conf spark.sql.defaultCatalog=bios \
     --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
     --conf spark.sql.catalog.bios=org.apache.iceberg.spark.SparkCatalog \
     --conf spark.sql.catalog.bios.catalog-impl=org.apache.iceberg.jdbc.JdbcCatalog \
@@ -23,7 +24,6 @@ spark-sql --packages $DEPENDENCIES \
     --conf spark.sql.catalog.bios.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
     --conf spark.sql.catalog.bios.s3.endpoint=http://${S3IP}:9000 \
     --conf spark.sql.catalog.spark_catalog=org.apache.iceberg.spark.SparkSessionCatalog \
-    --conf spark.sql.defaultCatalog=bios \
     --conf spark.eventLog.enabled=true \
     --conf spark.eventLog.dir=/workspace/spark-events \
     --conf spark.history.fs.logDirectory= /workspace/spark-events \
@@ -38,5 +38,5 @@ spark-sql --packages $DEPENDENCIES \
 
 
 
-#CREATE TABLE bios.tabela_particionada01 (id bigint, data string, category string) USING iceberg PARTITIONED BY (category);
-#INSERT INTO bios.tabela_particionada01 VALUES (1, 'Testando meus dados', 'teste');
+#CREATE TABLE bios.default.tabela_particionada02 (id bigint, data string, category string) USING iceberg PARTITIONED BY (category);
+#INSERT INTO bios.tabela_particionada02 VALUES (1, 'Testando meus dados', 'teste');

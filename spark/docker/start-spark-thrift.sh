@@ -21,8 +21,8 @@ start-thriftserver.sh --packages $DEPENDENCIES \
     --conf spark.sql.catalog.bios.catalog-impl=org.apache.iceberg.jdbc.JdbcCatalog \
     --conf spark.sql.catalog.bios.uri=jdbc:postgresql://host.docker.internal:5420/db_iceberg \
     --conf spark.sql.catalog.bios.jdbc.user=icbergcat \
-    --conf spark.sql.catalog.bios.jdbc.password=hNXz35UBRcAC \
-    --conf spark.sql.catalog.bios.default-namespace=bios
+    --conf spark.sql.catalog.bios.jdbc.password=hNXz35UBRcAC
 
+#docker exec -it spark_master /bin/bash
 #beeline
-#!connect jdbc:hive2://localhost:10000
+#!connect jdbc:hive2://localhost:10000/bios
