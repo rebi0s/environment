@@ -110,4 +110,4 @@ COPY run-maven.sh /
 RUN chmod +x /run-maven.sh
 RUN chmod +x /start-spark-sql.sh
 
-RUN /run-maven.sh
+CMD ["/bin/bash", "/run-maven.sh"]
