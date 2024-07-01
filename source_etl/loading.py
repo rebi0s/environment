@@ -1,10 +1,11 @@
 # inicialização
 import os
+import sys
 import logging
 from pyspark import SparkConf
 from pyspark import SparkContext
 from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StructField, LongType, DoubleType, StringType
+from pyspark.sql.types import StructType, StructField, LongType, DoubleType, StringType, IntegerType
 import pyspark.sql.functions as sqlLib
 
 
@@ -13,34 +14,23 @@ conf = (
     SparkConf()
     .set("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
     .set("spark.sql.catalog.bios", "org.apache.iceberg.spark.SparkCatalog")
+    .set("spark.sql.catalog.bios.catalog-impl", "org.apache.iceberg.jdbc.JdbcCatalog")
+    .set("spark.sql.catalog.bios.uri", "jdbc:postgresql://host.docker.internal:5420/db_iceberg")
+    .set("spark.sql.catalog.bios.jdbc.user", "icbergcat")
+    .set("spark.sql.catalog.bios.jdbc.password", "hNXz35UBRcAC")
+    .set("spark.sql.catalog.bios.warehouse", os.getenv("CTRNA_CATALOG_WAREHOUSE", "s3a://bios/"))
     .set("spark.sql.catalog.bios.io-impl", "org.apache.iceberg.aws.s3.S3FileIO")
-    .set("spark.sql.catalog.bios.warehouse", "s3a://bios/")
-    .set("spark.sql.catalog.bios.s3.endpoint", "http://host.docker.internal:9000")
-    .set("spark.sql.defaultCatalog", "bios") # Name of the Iceberg catalog
+    .set("spark.sql.catalog.bios.s3.endpoint", os.getenv("CTRNA_CATALOG_S3_ENDPOINT","http://172.17.0.1:9000"))
+    .set("spark.sql.catalog.spark_catalog","org.apache.iceberg.spark.SparkSessionCatalog")
     .set("spark.sql.catalogImplementation", "in-memory")
-    .set("spark.sql.catalog.bios.type", "hadoop") # Iceberg catalog type
-    .set("spark.executor.heartbeatInterval", "300000")
-    .set("spark.network.timeout", "400000")
+    .set("spark.sql.defaultCatalog", os.getenv("CTRNA_CATALOG_DEFAULT","bios")) # Name of the Iceberg catalog
 )
 
 spark = SparkSession.builder.config(conf=conf).getOrCreate()
 
-# Disable below line to see INFO logs
-spark.sparkContext.setLogLevel("ERROR")
-
-def load_config(spark_context: SparkContext):
-    spark_context._jsc.hadoopConfiguration().set("fs.s3a.access.key", os.getenv("AWS_ACCESS_KEY_ID", "openlakeuser"))
-    spark_context._jsc.hadoopConfiguration().set("fs.s3a.secret.key", os.getenv("AWS_SECRET_ACCESS_KEY", "openlakeuser"))
-    spark_context._jsc.hadoopConfiguration().set("fs.s3a.endpoint", os.getenv("ENDPOINT", "host.docker.internal:50000"))
-    spark_context._jsc.hadoopConfiguration().set("fs.s3a.connection.ssl.enabled", "true")
-    spark_context._jsc.hadoopConfiguration().set("fs.s3a.path.style.access", "true")
-    spark_context._jsc.hadoopConfiguration().set("fs.s3a.attempts.maximum", "1")
-    spark_context._jsc.hadoopConfiguration().set("fs.s3a.connection.establish.timeout", "5000")
-    spark_context._jsc.hadoopConfiguration().set("fs.s3a.connection.timeout", "10000")
-
-spark = SparkSession.builder.master("local[*]") \
-                    .appName('Rebios') \
-                    .getOrCreate()
+# spark = SparkSession.builder.master("local[*]") \
+#                     .appName('Rebios') \
+#                     .getOrCreate()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("rebiosparkJob")
@@ -88,7 +78,6 @@ logger.info("Inicialização.")
 #OBSERVATION
 #MEASUREMENT
 #COHORT
-
 
 #load dos municípios fazendo download de uma base pública
 municipios = [
@@ -202,9 +191,7 @@ df_estados = spark.createDataFrame(data=estados, schema = estados_cols)
 #			latitude float NULL,
 #			longitude float NULL );
 
-#carga dos dados do parquet do SINASC
-df_sinasc = spark.read.parquet("/home/warehouse/sinasc_2010_2022.parquet")
-
+# Estrutura SINASC até 2019
 ################################
 # inserção do location de cada município de entrada como sendo o endereço da person. 
 # Linhas de location adicionais serão criadas para conter os demais municípios de entrada, como CODMUNCART, CODMUNNASC, CODMUNNATU, considerando todas as colunas de município.
@@ -214,7 +201,7 @@ df_sinasc = spark.read.parquet("/home/warehouse/sinasc_2010_2022.parquet")
 #por ser PK será utilizado o código completo do munícipio com os dígitos do estado do início do código. o último dígito é o código verificador. apenas o código do munícipio gera repetição.
 #código do Brazil obtido no Athena do vocabulario SNOMED. Vai ser necessário um tratamento para os casos envolvendo estrangeiros. No sinasc o campo CODPAISRES vem com 1 para os brasileiros.
 spark.sql("""insert into location ( 
-            location_id integer , 
+            location_id  , 
 			address_1  ,           
 			address_2  ,          
 			city  ,                
@@ -268,7 +255,7 @@ df_cnes = df_cnes_tpunid.where(sqlLib.col('codigo').rlike('|'.join(df_cnes.tpuni
 #retornar o df_cnes.longitude
 
 spark.sql("""insert into location (
-            location_id integer ,
+            location_id  ,
 			address_1  ,
 			address_2  ,
 			city  ,
@@ -294,6 +281,8 @@ df_sinasc.codpaisres,
 df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))), 
 df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))) 
 )""")
+
+
 
 #CREATE TABLE care_site (
 #			care_site_id integer ,
@@ -338,7 +327,7 @@ df_care_site.identity,
 df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))), 
 df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))), 
 (select location_id from location where location_source_value = replace(df_sinasc.codestab,'.')), 
-replace(df_sinasc.codestab,'.'),
+df_sinasc.codestab,
 null
 )""")
 
@@ -421,6 +410,131 @@ values (df_provider.identity, 'Ignorado', 9)""")
 #			ethnicity_source_value varchar(50) NULL,
 #			ethnicity_source_concept_id integer NULL );
 
+
+####################################################################
+##  Leitura do arquivo de entrada (source)                        ##
+####################################################################
+
+# APGAR1	Apgar no 1º minuto
+# APGAR5	Apgar no 5º minuto
+# CODANOMAL	Código da anomalia (CID 10)
+# CODCART	Código do cartório
+# CODESTAB	Código do estabelecimento de saúde onde ocorreu o nascimento
+# CODMUNCART	Código do município do cartório
+# CODMUNNASC	Código do município de nascimento
+# CODMUNNATU	Código do município de naturalidade da mãe
+# CODMUNRES	Código do município de residência
+# CODOCUPMAE	Código de ocupação da mãe conforme tabela do CBO (Código Brasileiro de Ocupações).
+# CODPAISRES	Código do país de residência
+# CODUFNATU	Código da UF de naturalidade da mãe
+# CONSPRENAT	Número de consultas pré‐natal
+# CONSULTAS	Número de consultas de pré‐natal. Valores: 1– Nenhuma; 2– de 1 a 3; 3– de 4 a 6; 4– 7 e mais; 9– Ignorado.
+# contador	Contador indo de 1 até n, sendo n o número de observações 
+# DIFDATA	Diferença entre a data de óbito e data do recebimento original da DO ([DTNASC] – [DTRECORIG])
+# DTCADASTRO	Data do cadastro da DN no sistema
+# DTDECLARAC	Data da declaração: dd mm aaaa
+# DTNASC	Data de nascimento: dd mm aaaa
+# DTNASCMAE	Data de nascimento da mãe: dd mm aaaa
+# DTRECEBIM	Data do último recebimento do lote, dada pelo Sisnet.
+# DTRECORIG	Data do 1º recebimento do lote, dada pelo Sisnet.
+# DTRECORIGA	
+# DTREGCART	Data do registro no cartório
+# DTULTMENST	Data da última menstruação (DUM): dd mm aaaa
+# ESCMAE	Escolaridade, em anos de estudo concluídos: 1 – Nenhuma; 2 – 1 a 3 anos; 3 – 4 a 7 anos; 4 – 8 a 11 anos; 5 – 12 e mais; 9 – Ignorado.
+# ESCMAE2010	Escolaridade 2010. Valores: 0 – Sem escolaridade; 1 – Fundamental I (1ª a 4ª série); 2 – Fundamental II (5ª a 8ª série); 3 – Médio (antigo 2º Grau); 4 – Superior incompleto; 5 – Superior completo; 9 – Ignorado.
+# ESCMAEAGR1	Escolaridade 2010 agregada. Valores: 00 – Sem Escolaridade; 01 – Fundamental I Incompleto; 02 – Fundamental I Completo; 03 – Fundamental II Incompleto; 04 – Fundamental II Completo; 05 – Ensino Médio Incompleto; 06 – Ensino Médio Completo; 07 – Superior Incompleto; 08 – Superior Completo; 09 – Ignorado; 10 – Fundamental I Incompleto ou Inespecífico; 11 – Fundamental II Incompleto ou Inespecífico; 12 – Ensino Médio Incompleto ou Inespecífico.
+# ESTCIVMAE	Situação conjugal da mãe: 1– Solteira; 2– Casada; 3– Viúva; 4– Separada judicialmente/divorciada; 5– União estável; 9– Ignorada.
+# GESTACAO	Semanas de gestação: 1– Menos de 22 semanas; 2– 22 a 27 semanas; 3– 28 a 31 semanas; 4– 32 a 36 semanas; 5– 37 a 41 semanas; 6– 42 semanas e mais; 9– Ignorado.
+# GRAVIDEZ	Tipo de gravidez: 1– Única; 2– Dupla; 3– Tripla ou mais; 9– Ignorado.
+# HORANASC	Horário de nascimento
+# IDADEMAE	Idade da mãe
+# IDADEPAI	Idade do pai
+# IDANOMAL	Anomalia identificada: 1– Sim; 2– Não; 9– Ignorado
+# KOTELCHUCK	1 Não fez pré-natal (Campo33=0); 2 Inadequado (Campo34>3 ou Campo34<=3 e Campo33<3); 3 Intermediário (Campo34<=3 e Campo33 entre 3 e 5); 4 Adequado (Campo34<=3 e Campo33=6); 5 Mais que adequado (Campo34<=3 e Campo33>=7); 6 Não Classificados (campos 33 ou 34, Nulo ou Ign)
+# LOCNASC	Local de nascimento: 1 – Hospital; 2 – Outros estabelecimentos de saúde; 3 – Domicílio; 4 – Outros.
+# MESPRENAT	Mês de gestação em que iniciou o pré‐natal
+# NATURALMAE	Se a mãe for estrangeira, constará o código do país de nascimento.
+# NUMEROLOTE	Número do lote
+# NUMREGCART	Número do registro civil (cartório)
+# ORIGEM	
+# PARIDADE	0-nulípara; 1 multipara; 9- ignorado
+# PARTO	Tipo de parto: 1– Vaginal; 2– Cesário; 9– Ignorado
+# PESO	Peso ao nascer em gramas.
+# QTDFILMORT	Número de filhos mortos
+# QTDFILVIVO	Número de filhos vivos
+# QTDGESTANT	Número de gestações anteriores
+# QTDPARTCES	Número de partos cesáreos
+# QTDPARTNOR	Número de partos vaginais
+# RACACOR	Tipo de raça e cor do nascido: 1– Branca; 2– Preta; 3– Amarela; 4– Parda; 5– Indígena.
+# RACACOR_RN	Tipo de raça e cor do nascido: 1– Branca; 2– Preta; 3– Amarela; 4– Parda; 5– Indígena.
+# RACACORMAE	1 Tipo de raça e cor da mãe: 1– Branca; 2– Preta; 3– Amarela; 4– Parda; 5– Indígena.
+# RACACORN	Tipo de raça e cor do nascido: 1– Branca; 2– Preta; 3– Amarela; 4– Parda; 5– Indígena.
+# SEMAGESTAC	Número de semanas de gestação.
+# SERIESCMAE	Série escolar da mãe. Valores de 1 a 8.
+# SEXO	Sexo: M – Masculino; F – Feminino; I – ignorado
+# STCESPARTO	Cesárea ocorreu antes do trabalho de parto iniciar? Valores: 1– Sim; 2– Não; 3– Não se aplica; 9– Ignorado.
+# STDNEPIDEM	Status de DN Epidemiológica. Valores: 1 – SIM; 0 – NÃO.
+# STDNNOVA	Status de DN Nova. Valores: 1 – SIM; 0 – NÃO.
+# STTRABPART	Trabalho de parto induzido? Valores: 1– Sim; 2– Não; 3– Não se aplica; 9– Ignorado.
+# TPAPRESENT	Tipo de apresentação do RN. Valores: 1– Cefálico; 2– Pélvica ou podálica; 3– Transversa; 9– Ignorado.
+# TPDOCRESP	Tipo do documento do responsável. Valores: 1‐CNES; 2‐CRM; 3‐ COREN; 4‐RG; 5‐CPF.
+# TPFUNCRESP	Tipo de função do responsável pelo preenchimento. Valores: 1– Médico; 2– Enfermeiro; 3– Parteira; 4– Funcionário do cartório; 5– Outros.
+# TPMETESTIM	Método para estimar utilizado. Valores: 1– Exame físico; 2– Outro método; 9– Ignorado.
+# TPNASCASSI	Nascimento foi assistido por? Valores: 1– Médico; 2– Enfermeira/obstetriz; 3– Parteira; 4– Outros; 9– Ignorado
+# TPROBSON	Código do Grupo de Robson, gerado pelo sistema
+# VERSAOSIST	Versão do sistema
+
+#carga dos dados do parquet do SINASC
+source_path = os.getenv("CTRNA_SOURCE_SINASC_PATH","/home/warehouse/")
+arquivo_entrada = "sinasc_2010_2022.parquet"
+lista_arquivos=[]
+
+# leitura do sinasc original em formato parquet
+if not os.path.isfile(os.path.join(source_path, arquivo_entrada)):
+        logger.info("Arquivo SINASC não localizado. Carga interrompida.")
+        sys.exit(0)
+
+df_sinasc = spark.read.parquet(os.path.join(source_path, arquivo_entrada))
+
+####################################################################
+##  Carrega em memória os cadastros cadatrais                      ##
+####################################################################
+
+# Table location 
+# location_id  ,
+# address_1  ,
+# address_2  ,
+# city  ,
+# state ,
+# zip ,
+# county  ,
+# location_source_value  ,
+# country_concept_id  ,
+# country_source_value ,
+# latitude,
+# longitude)
+
+# df_teste = spark.sql(f"SELECT * FROM {CATALOG_NAME}.{db.name}.{table.name} LIMIT 5")
+
+# dataframe com todos os registros de location
+df_location = spark.read.format("iceberg").load(f"bios.location")
+# dataframe com todos os registros de care_site
+df_care_site = spark.read.format("iceberg").load(f"bios.care_site")
+# dataframe com todos os registros de concept
+df_concept = spark.read.format("iceberg").load(f"bios.concept")
+
+# left outer join entre sinasc e location para associar dados de município
+df_sinasc = (df_sinasc.join(df_location, on=['df_sinasc.codmunres == df_location.location_id'], how='left'))
+# left outer join entre sinasc e care site para associar dados de estabelecimento de saúde
+df_sinasc = (df_sinasc.join(df_care_site, on=['df_sinasc.codestab == df_care_site.care_site_source_value'], how='left'))
+
+# left outer join entre sinasc e vocabulário para associar dados de 
+#df_sinasc = (df_sinasc.join(df_concept, on=['df_sinasc.codmunres == df_concept.location_id'], how='left'))
+
+
+####################################################################
+##  Persistir os dados no Climaterna com as consistências feitas  ##
+####################################################################
 
 # registro do recém nascido
 #esse location é o do endereço da person. foi mapeado para o location do código de município de nascimento.
