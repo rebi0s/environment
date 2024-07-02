@@ -6,7 +6,7 @@ from pyspark import SparkConf
 from pyspark import SparkContext
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, LongType, DoubleType, StringType, IntegerType
-import pyspark.sql.functions as sqlLib
+from pyspark.sql.functions import *
 
 
 # adding iceberg configs
@@ -18,6 +18,7 @@ conf = (
     .set("spark.sql.catalog.bios.uri", "jdbc:postgresql://host.docker.internal:5420/db_iceberg")
     .set("spark.sql.catalog.bios.jdbc.user", "icbergcat")
     .set("spark.sql.catalog.bios.jdbc.password", "hNXz35UBRcAC")
+    .set("spark.sql.catalog.bios.jdbc.schema-version=V1")
     .set("spark.sql.catalog.bios.warehouse", os.getenv("CTRNA_CATALOG_WAREHOUSE", "s3a://bios/"))
     .set("spark.sql.catalog.bios.io-impl", "org.apache.iceberg.aws.s3.S3FileIO")
     .set("spark.sql.catalog.bios.s3.endpoint", os.getenv("CTRNA_CATALOG_S3_ENDPOINT","http://172.17.0.1:9000"))
@@ -40,7 +41,7 @@ logger.info("Inicialização.")
 #ordem de inserção segundo a dependência entre as tabelas
 #OMOP Version 5.4
 #CONCEPT
-#CONCEPT_CLASS
+#CONCEPT_CLASSs
 #VOCABULARY
 #DOMAIN
 #LOCATION
@@ -487,7 +488,6 @@ values (df_provider.identity, 'Ignorado', 9)""")
 #carga dos dados do parquet do SINASC
 source_path = os.getenv("CTRNA_SOURCE_SINASC_PATH","/home/warehouse/")
 arquivo_entrada = "sinasc_2010_2022.parquet"
-lista_arquivos=[]
 
 # leitura do sinasc original em formato parquet
 if not os.path.isfile(os.path.join(source_path, arquivo_entrada)):
@@ -531,6 +531,12 @@ df_sinasc = (df_sinasc.join(df_care_site, on=['df_sinasc.codestab == df_care_sit
 # left outer join entre sinasc e vocabulário para associar dados de 
 #df_sinasc = (df_sinasc.join(df_concept, on=['df_sinasc.codmunres == df_concept.location_id'], how='left'))
 
+#spark.sql("select (year(make_date(substring('24071971', 5, 4), substring('24071971', 3, 2), substring('24071971', 1, 2)))) as ano").show()
+df_sinasc = df_sinasc.select("*", (year(make_date(substring(df_sinasc.dtnasc, 5, 4), substring(df_sinasc.dtnasc, 3, 2), substring(df_sinasc.dtnasc, 1, 2)))), \
+month(make_date(substring(df_sinasc.dtnasc, 5, 4), substring(df_sinasc.dtnasc, 3, 2), substring(df_sinasc.dtnasc, 1, 2))) , \
+day(make_date(substring(df_sinasc.dtnasc, 5, 4), substring(df_sinasc.dtnasc, 3, 2), substring(df_sinasc.dtnasc, 1, 2))) , \
+make_timestamp(substring(df_sinasc.dtnasc, 5, 4), substring(df_sinasc.dtnasc, 3, 2), substring(df_sinasc.dtnasc, 1, 2), substring(df_sinasc.horanasc,1,2),  substring(df_sinasc.horanasc,3,2))                              
+)
 
 ####################################################################
 ##  Persistir os dados no Climaterna com as consistências feitas  ##
