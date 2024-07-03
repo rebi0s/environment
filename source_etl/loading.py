@@ -532,11 +532,23 @@ df_sinasc = (df_sinasc.join(df_care_site, on=['df_sinasc.codestab == df_care_sit
 #df_sinasc = (df_sinasc.join(df_concept, on=['df_sinasc.codmunres == df_concept.location_id'], how='left'))
 
 #spark.sql("select (year(make_date(substring('24071971', 5, 4), substring('24071971', 3, 2), substring('24071971', 1, 2)))) as ano").show()
-df_sinasc = df_sinasc.select("*", (year(make_date(substring(df_sinasc.dtnasc, 5, 4), substring(df_sinasc.dtnasc, 3, 2), substring(df_sinasc.dtnasc, 1, 2)))), \
-month(make_date(substring(df_sinasc.dtnasc, 5, 4), substring(df_sinasc.dtnasc, 3, 2), substring(df_sinasc.dtnasc, 1, 2))) , \
-day(make_date(substring(df_sinasc.dtnasc, 5, 4), substring(df_sinasc.dtnasc, 3, 2), substring(df_sinasc.dtnasc, 1, 2))) , \
-make_timestamp(substring(df_sinasc.dtnasc, 5, 4), substring(df_sinasc.dtnasc, 3, 2), substring(df_sinasc.dtnasc, 1, 2), substring(df_sinasc.horanasc,1,2),  substring(df_sinasc.horanasc,3,2))                              
+df_sinasc = df_sinasc.select("*", \
+when(df_sinasc['SEXO'] == 'M', '8507').when(df_sinasc['SEXO'] == 'F', '8532').when(df_sinasc['SEXO'] == '1', '8507').when(df_sinasc['SEXO'] == '2', '8532').otherwise('8551').alias('sexo'), \
+year(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("year_of_birth"), \
+month(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("month_of_birth"), \
+day(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("day_of_birth"), \
+make_timestamp(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2)), substring(lpad(df_sinasc.HORANASC,4,'0'),1,2),  substring(lpad(df_sinasc.HORANASC,4,'0'),3,2)).alias("birth_datetime"), \
+when(df_sinasc['RACACOR'] == 1, 3212942).when(df_sinasc['RACACOR'] == 2, 3213733).when(df_sinasc['RACACOR'] == 3, 3213498).when(df_sinasc['RACACOR'] == 4, 3213487).otherwise(3213694).alias('raca'),  \
+lit(38003563).alias('ethnicity_concept_id')
 )
+
+
+df_sinasc.select(when(df_sinasc['SEXO'] == 'M', '8507').when(df_sinasc['SEXO'] == 'F', '8532').when(df_sinasc['SEXO'] == '1', '8507').when(df_sinasc['SEXO'] == '2', '8532').otherwise('8551').alias('sexo'), \
+year(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("year_of_birth"), \
+month(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("month_of_birth"), \
+make_timestamp(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2)), substring(lpad(df_sinasc.HORANASC,4,'0'),1,2),  substring(lpad(df_sinasc.HORANASC,4,'0'),3,2)).alias("birth_datetime"), \
+when(df_sinasc['RACACOR'] == 1, 3212942).when(df_sinasc['RACACOR'] == 2, 3213733).when(df_sinasc['RACACOR'] == 3, 3213498).when(df_sinasc['RACACOR'] == 4, 3213487).otherwise(3213694).alias('raca'),  \
+lit(38003563).alias('ethnicity_concept_id')).show()
 
 ####################################################################
 ##  Persistir os dados no Climaterna com as consistências feitas  ##
