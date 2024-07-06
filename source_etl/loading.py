@@ -7,6 +7,7 @@ from pyspark import SparkContext
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, LongType, DoubleType, StringType, IntegerType
 from pyspark.sql.functions import *
+from pyspark.sql.functions import monotonically_increasing_id
 
 
 # adding iceberg configs
@@ -238,8 +239,7 @@ df_cnes = spark.createDataFrame(data=cnes, schema = cnes_cols)
 ################################
 # antes da inserção do estabelecimento, atualiza o df_cnes com o concept_id do código do tipo da unidade a partir do df_cnes_tpunid
 ################################
-df_cnes = df_cnes_tpunid.where(sqlLib.col('codigo').rlike('|'.join(df_cnes.tpunid,'.'))) # retorna o conceptid do tipo da unidade 
-
+df_cnes = (df_cnes.join(df_cnes_tpunid, on=['df_cnes.tpunid == df_cnes_tpunid.codigo'])) # retorna o conceptid do tipo da unidade 
 
 ################################
 # inserção do location de cada estabelecimento de saúde
@@ -523,57 +523,51 @@ df_care_site = spark.read.format("iceberg").load(f"bios.care_site")
 # dataframe com todos os registros de concept
 df_concept = spark.read.format("iceberg").load(f"bios.concept")
 
+#obtem o max person_id para usar na inserção de novos registros
+count_max_person_df = spark.sql("SELECT max(person_id) + 1 AS max_person FROM bios.person")
+count_max_person = count_max_person_df.first().max_person
+
+#geração dos id's únicos nos dados de entrada. O valor inicial é zero.
+df_sinasc = df_sinasc.withColumn("person_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df = df_sinasc.withColumn("person_id", df_sinasc["person_id"] + count_max_person)
+
+# esses df's poderão conter valores nulos para município e estabelecimento de saúde, caso não haja cadastro.
+# a partir da coluna person_id, os registros de entrada se tornam unicamente identificados.
 # left outer join entre sinasc e location para associar dados de município
 df_sinasc_location = (df_sinasc.join(df_location, on=['df_sinasc.codmunres == df_location.location_id'], how='left'))
 # left outer join entre sinasc e care site para associar dados de estabelecimento de saúde
 df_sinasc_cnes = (df_sinasc.join(df_care_site, on=['df_sinasc.codestab == df_care_site.care_site_source_value'], how='left'))
-
 # left outer join entre sinasc e vocabulário para associar dados de 
 #df_sinasc = (df_sinasc.join(df_concept, on=['df_sinasc.codmunres == df_concept.location_id'], how='left'))
 
-#spark.sql("select (year(make_date(substring('24071971', 5, 4), substring('24071971', 3, 2), substring('24071971', 1, 2)))) as ano").show()
-df_sinasc = df_sinasc.select( \
+# tratamento para resolver os valores nulos antes da inserção no banco
+# inserir novos municípios 
+
+# inserir novos estabelecimentos de saúde
+
+df_sinasc_writeToDb = df_sinasc.select( \
+df_sinasc.person_id, \
 when(df_sinasc['SEXO'] == 'M', '8507').when(df_sinasc['SEXO'] == 'F', '8532').when(df_sinasc['SEXO'] == '1', '8507').when(df_sinasc['SEXO'] == '2', '8532').otherwise('8551').alias('sexo'), \
 year(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("year_of_birth"), \
 month(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("month_of_birth"), \
 dayofmonth(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("day_of_birth"), \
-to_timestamp(concat(lpad(df_sinasc.DTNASC,8,'0'), lit(' '), lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('data_nasc'), \
-when(df_sinasc['RACACOR'] == 1, 3212942).when(df_sinasc['RACACOR'] == 2, 3213733).when(df_sinasc['RACACOR'] == 3, 3213498).when(df_sinasc['RACACOR'] == 4, 3213487).otherwise(3213694).alias('raca'),  \
+to_timestamp(concat(lpad(df_sinasc.DTNASC,8,'0'), lit(' '), lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('birth_datetime'), \
+when(df_sinasc['RACACOR'] == 1, 3212942).when(df_sinasc['RACACOR'] == 2, 3213733).when(df_sinasc['RACACOR'] == 3, 3213498).when(df_sinasc['RACACOR'] == 4, 3213487).otherwise(3213694).alias('race_concept_id'),  \
 lit(38003563).alias('ethnicity_concept_id'), \
-df_sinasc.CODMUNRES.alias('local_nascimento'), \
-lit(None).cast(StringType()).alias('provider'), \
-df_sinasc.CODESTAB.alias('local_atendimento'), \
+df_sinasc.CODMUNRES.alias('location_id'), \
+lit(None).cast(StringType()).alias('provider_id'), \
+df_sinasc.CODESTAB.alias('care_site_id'), \
 lit(None).cast(StringType()).alias('person_source_value'), \
-df_sinasc.SEXO,
+df_sinasc.SEXO.alias('gender_source_value'),
 lit(None).cast(StringType()).alias('gender_source_concept_id'), \
-df_sinasc.RACACOR,  
+df_sinasc.RACACOR.alias(''),  
 lit(None).cast(StringType()).alias('race_source_concept_id'), \
 lit(None).cast(StringType()).alias('ethnicity_source_value'), \
 lit(None).cast(StringType()).alias('ethnicity_source_concept_id') \
 )
-df_sinasc.writeTo("bios.person").append()
 
-
-df_sinasc.select(when(df_sinasc['SEXO'] == 'M', '8507').when(df_sinasc['SEXO'] == 'F', '8532').when(df_sinasc['SEXO'] == '1', '8507').when(df_sinasc['SEXO'] == '2', '8532').otherwise('8551').alias('sexo'), \
-year(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("year_of_birth"), \
-month(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("month_of_birth"), \
-dayofmonth(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("day_of_birth"), \
-to_timestamp(concat(lpad(df_sinasc.DTNASC,8,'0'), lit(' '), lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('data_nasc'), \
-when(df_sinasc['RACACOR'] == 1, 3212942).when(df_sinasc['RACACOR'] == 2, 3213733).when(df_sinasc['RACACOR'] == 3, 3213498).when(df_sinasc['RACACOR'] == 4, 3213487).otherwise(3213694).alias('raca'),  \
-lit(38003563).alias('ethnicity_concept_id'), \
-df_sinasc.CODMUNRES.alias('local_nascimento'), \
-lit(None).cast(StringType()).alias('provider'), \
-df_sinasc.CODESTAB.alias('local_atendimento'), \
-lit(None).cast(StringType()).alias('person_source_value'), \
-df_sinasc.SEXO,
-lit(None).cast(StringType()).alias('gender_source_concept_id'), \
-df_sinasc.RACACOR,  
-lit(None).cast(StringType()).alias('race_source_concept_id'), \
-lit(None).cast(StringType()).alias('ethnicity_source_value'), \
-lit(None).cast(StringType()).alias('ethnicity_source_concept_id') \
-).show()
-
-
+df_sinasc_writeToDb.writeTo("bios.person").append()
 
 ####################################################################
 ##  Persistir os dados no Climaterna com as consistências feitas  ##
