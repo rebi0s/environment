@@ -7,7 +7,9 @@ from pyspark import SparkContext
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, LongType, DoubleType, StringType, IntegerType
 from pyspark.sql.functions import *
-from pyspark.sql.functions import monotonically_increasing_id
+from pyspark.sql.window import Window
+from pyspark.sql.functions import row_number
+
 
 
 # adding iceberg configs
@@ -527,17 +529,20 @@ df_concept = spark.read.format("iceberg").load(f"bios.concept")
 count_max_person_df = spark.sql("SELECT max(person_id) + 1 AS max_person FROM bios.person")
 count_max_person = count_max_person_df.first().max_person
 
-#geração dos id's únicos nos dados de entrada. O valor inicial é zero.
-df_sinasc = df_sinasc.withColumn("person_id", monotonically_increasing_id())
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_sinasc_window = Window.orderBy(df_sinasc['CODMUNRES'])
+df_sinasc = df_sinasc.withColumn("person_id", row_number().over(df_sinasc_window))
 #sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df = df_sinasc.withColumn("person_id", df_sinasc["person_id"] + count_max_person)
+df_sinasc = df_sinasc.withColumn("person_id", df_sinasc["person_id"] + count_max_person)
 
 # esses df's poderão conter valores nulos para município e estabelecimento de saúde, caso não haja cadastro.
 # a partir da coluna person_id, os registros de entrada se tornam unicamente identificados.
 # left outer join entre sinasc e location para associar dados de município
-df_sinasc_location = (df_sinasc.join(df_location, on=['df_sinasc.codmunres == df_location.location_id'], how='left'))
+df_sinasc_location = (df_sinasc.join(df_location, on=['df_sinasc.CODMUNRES == df_location.location_id'], how='left'))
 # left outer join entre sinasc e care site para associar dados de estabelecimento de saúde
-df_sinasc_cnes = (df_sinasc.join(df_care_site, on=['df_sinasc.codestab == df_care_site.care_site_source_value'], how='left'))
+df_sinasc_cnes = (df_sinasc.join(df_care_site, on=['df_sinasc.CODESTAB == df_care_site.care_site_source_value'], how='left'))
 # left outer join entre sinasc e vocabulário para associar dados de 
 #df_sinasc = (df_sinasc.join(df_concept, on=['df_sinasc.codmunres == df_concept.location_id'], how='left'))
 
@@ -568,6 +573,40 @@ lit(None).cast(StringType()).alias('ethnicity_source_concept_id') \
 )
 
 df_sinasc_writeToDb.writeTo("bios.person").append()
+
+
+# |-- observation_period_id: long (nullable = false)
+# |-- person_id: long (nullable = false)
+# |-- observation_period_start_date: date (nullable = false)
+# |-- observation_period_end_date: timestamp (nullable = false)
+# |-- period_type_concept_id: long (nullable = false)
+
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DateType, TimestampType
+
+# Definindo o novo esquema
+df_z_schema = StructType([ \
+    StructField("observation_period_id", LongType(), False), \
+    StructField("person_id", LongType(), False), \
+    StructField("observation_period_start_date", DateType(), False), \
+    StructField("observation_period_end_date", TimestampType(), False), \
+    StructField("period_type_concept_id", LongType(), False) \
+])
+
+df_y=df_sinasc.select(lit(1).alias('observation_period_id'), \
+                      lit(2).alias('person_id'), \
+                      when(df_sinasc.DTNASC == lit(None).cast(StringType()), make_date(lit('01'),lit('01'),lit('01'))).otherwise(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("observation_period_start_date"), \
+                      to_timestamp(concat(lpad(df_sinasc.DTNASC,8,'0'), lit(' '), lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('observation_period_end_date'), \
+                      lit(3).alias('period_type_concept_id'))
+
+# Aplicando o novo esquema ao DataFrame e copiando os dados.
+df_z = spark.createDataFrame(df_y.rdd, df_z_schema)
+df_z.show()
+df_z.printSchema()
+
+df_z.writeTo("bios.observation_period").append()
+   
+df_obs_perido_from_db = spark.read.format("iceberg").load(f"bios.observation_period")
+
 
 ####################################################################
 ##  Persistir os dados no Climaterna com as consistências feitas  ##
