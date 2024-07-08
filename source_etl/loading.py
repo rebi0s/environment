@@ -5,7 +5,7 @@ import logging
 from pyspark import SparkConf
 from pyspark import SparkContext
 from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StructField, LongType, DoubleType, StringType, IntegerType
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DateType, TimestampType, LongType
 from pyspark.sql.functions import *
 from pyspark.sql.window import Window
 from pyspark.sql.functions import row_number
@@ -499,7 +499,7 @@ if not os.path.isfile(os.path.join(source_path, arquivo_entrada)):
 df_sinasc = spark.read.parquet(os.path.join(source_path, arquivo_entrada))
 
 ####################################################################
-##  Carrega em memória os cadastros cadatrais                      ##
+##  Carrega em memória os cadastros                               ##
 ####################################################################
 
 # Table location 
@@ -518,6 +518,9 @@ df_sinasc = spark.read.parquet(os.path.join(source_path, arquivo_entrada))
 
 # df_teste = spark.sql(f"SELECT * FROM {CATALOG_NAME}.{db.name}.{table.name} LIMIT 5")
 
+
+#df_sinasc = spark.read.format("CSV").options(header=True, inferSchema=True).load("/home/src/etl/SINASC_REGISTRO_LAIS.csv")
+
 # dataframe com todos os registros de location
 df_location = spark.read.format("iceberg").load(f"bios.location")
 # dataframe com todos os registros de care_site
@@ -526,15 +529,16 @@ df_care_site = spark.read.format("iceberg").load(f"bios.care_site")
 df_concept = spark.read.format("iceberg").load(f"bios.concept")
 
 #obtem o max person_id para usar na inserção de novos registros
-count_max_person_df = spark.sql("SELECT max(person_id) + 1 AS max_person FROM bios.person")
+count_max_person_df = spark.sql("SELECT greatest(max(person_id),0) + 1 AS max_person FROM bios.person")
 count_max_person = count_max_person_df.first().max_person
 
 #geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 # a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
 # do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
 df_sinasc_window = Window.orderBy(df_sinasc['CODMUNRES'])
+# nesse ponto o dataframe com os dados de entrada recebe a coluna person_id que será a chave de cada linha durante o etl.
 df_sinasc = df_sinasc.withColumn("person_id", row_number().over(df_sinasc_window))
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados atualizando os registros no df antes de escrever no banco
 df_sinasc = df_sinasc.withColumn("person_id", df_sinasc["person_id"] + count_max_person)
 
 # esses df's poderão conter valores nulos para município e estabelecimento de saúde, caso não haja cadastro.
@@ -551,13 +555,38 @@ df_sinasc_cnes = (df_sinasc.join(df_care_site, on=['df_sinasc.CODESTAB == df_car
 
 # inserir novos estabelecimentos de saúde
 
-df_sinasc_writeToDb = df_sinasc.select( \
+# *************************************************************
+#  PERSON - Persistência dos dados 
+# *************************************************************
+# Definindo o novo esquema para suportar valores nulos e não-nulos.
+df_person_schema = StructType([ \
+    StructField("person_id", LongType(), False), \
+    StructField("gender_concept_id", LongType(), False), \
+    StructField("year_of_birth", IntegerType(), False), \
+    StructField("month_of_birth", IntegerType(), True), \
+    StructField("day_of_birth", IntegerType(), True), \
+    StructField("birth_timestamp", TimestampType(), True), \
+    StructField("race_concept_id", LongType(), False), \
+    StructField("ethnicity_concept_id", LongType(), False), \
+    StructField("location_id", LongType(), True), \
+    StructField("provider_id", LongType(), True), \
+    StructField("care_site_id", LongType(), True), \
+    StructField("person_source_value", StringType(), True), \
+    StructField("gender_source_value", StringType(), True), \
+    StructField("gender_source_concept_id", LongType(), True), \
+    StructField("race_source_value", StringType(), True), \
+    StructField("race_source_concept_id", LongType(), True), \
+    StructField("ethnicity_source_value", StringType(), True), \
+    StructField("ethnicity_source_concept_id", LongType(), True) \
+])
+
+df_person = spark.createDataFrame(df_sinasc.select( \
 df_sinasc.person_id, \
-when(df_sinasc['SEXO'] == 'M', '8507').when(df_sinasc['SEXO'] == 'F', '8532').when(df_sinasc['SEXO'] == '1', '8507').when(df_sinasc['SEXO'] == '2', '8532').otherwise('8551').alias('sexo'), \
+when(df_sinasc['SEXO'] == 'M', 8507).when(df_sinasc['SEXO'] == 'F', 8532).when(df_sinasc['SEXO'] == '1', 8507).when(df_sinasc['SEXO'] == '2', 8532).otherwise(8551).alias('gender_concept_id'), \
 year(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("year_of_birth"), \
 month(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("month_of_birth"), \
 dayofmonth(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("day_of_birth"), \
-to_timestamp(concat(lpad(df_sinasc.DTNASC,8,'0'), lit(' '), lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('birth_datetime'), \
+to_timestamp(concat(lpad(df_sinasc.DTNASC,8,'0'), lit(' '), lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('birth_timestamp'), \
 when(df_sinasc['RACACOR'] == 1, 3212942).when(df_sinasc['RACACOR'] == 2, 3213733).when(df_sinasc['RACACOR'] == 3, 3213498).when(df_sinasc['RACACOR'] == 4, 3213487).otherwise(3213694).alias('race_concept_id'),  \
 lit(38003563).alias('ethnicity_concept_id'), \
 df_sinasc.CODMUNRES.alias('location_id'), \
@@ -566,14 +595,19 @@ df_sinasc.CODESTAB.alias('care_site_id'), \
 lit(None).cast(StringType()).alias('person_source_value'), \
 df_sinasc.SEXO.alias('gender_source_value'),
 lit(None).cast(StringType()).alias('gender_source_concept_id'), \
-df_sinasc.RACACOR.alias(''),  
+df_sinasc.RACACOR.alias('race_source_value'),  
 lit(None).cast(StringType()).alias('race_source_concept_id'), \
 lit(None).cast(StringType()).alias('ethnicity_source_value'), \
 lit(None).cast(StringType()).alias('ethnicity_source_concept_id') \
-)
+).rdd, \
+df_person_schema)
 
-df_sinasc_writeToDb.writeTo("bios.person").append()
+# Persistindo os dados de person no banco.
+df_person.writeTo("bios.person").append()
 
+# *************************************************************
+#  OBSERVATION_PERIOD - Persistência dos dados 
+# *************************************************************
 
 # |-- observation_period_id: long (nullable = false)
 # |-- person_id: long (nullable = false)
@@ -581,10 +615,8 @@ df_sinasc_writeToDb.writeTo("bios.person").append()
 # |-- observation_period_end_date: timestamp (nullable = false)
 # |-- period_type_concept_id: long (nullable = false)
 
-from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DateType, TimestampType
-
-# Definindo o novo esquema
-df_z_schema = StructType([ \
+# Definindo o novo esquema para suportar valores nulos e não-nulos.
+df_obs_period_schema = StructType([ \
     StructField("observation_period_id", LongType(), False), \
     StructField("person_id", LongType(), False), \
     StructField("observation_period_start_date", DateType(), False), \
@@ -592,20 +624,33 @@ df_z_schema = StructType([ \
     StructField("period_type_concept_id", LongType(), False) \
 ])
 
-df_y=df_sinasc.select(lit(1).alias('observation_period_id'), \
-                      lit(2).alias('person_id'), \
-                      when(df_sinasc.DTNASC == lit(None).cast(StringType()), make_date(lit('01'),lit('01'),lit('01'))).otherwise(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("observation_period_start_date"), \
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_obs_period=spark.createDataFrame(df_sinasc.select(\
+                      lit(0).cast(LongType()).alias('observation_period_id'), \
+                      df_sinasc.person_id.alias('person_id'), \
+                      to_timestamp(concat(lpad(df_sinasc.DTNASC,8,'0'), lit(' '), lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias("observation_period_start_date"), \
                       to_timestamp(concat(lpad(df_sinasc.DTNASC,8,'0'), lit(' '), lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('observation_period_end_date'), \
-                      lit(3).alias('period_type_concept_id'))
+                      lit(4193440).alias('period_type_concept_id')).rdd, \
+                      df_obs_period_schema)
 
-# Aplicando o novo esquema ao DataFrame e copiando os dados.
-df_z = spark.createDataFrame(df_y.rdd, df_z_schema)
-df_z.show()
-df_z.printSchema()
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_obs_period_df = spark.sql("SELECT greatest(max(observation_period_id),0) + 1 AS max_obs_period FROM bios.observation_period")
+count_max_obs_period = count_max_obs_period_df.first().max_obs_period
 
-df_z.writeTo("bios.observation_period").append()
-   
-df_obs_perido_from_db = spark.read.format("iceberg").load(f"bios.observation_period")
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_obs_period_window = Window.orderBy(df_obs_period['person_id'])
+df_obs_period = df_obs_period.withColumn("observation_period_id", row_number().over(df_obs_period_window).cast(LongType()))
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_obs_period = df_obs_period.withColumn("observation_period_id", df_obs_period["observation_period_id"] + count_max_obs_period)
+# persistindo os dados de observation_period no banco.
+df_obs_period.writeTo("bios.observation_period").append()
+
+
+
+
 
 
 ####################################################################
