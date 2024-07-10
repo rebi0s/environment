@@ -3,12 +3,12 @@ import os
 import sys
 import logging
 from pyspark import SparkConf
-from pyspark import SparkContext
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DateType, TimestampType, LongType
-from pyspark.sql.functions import *
+from pyspark.sql.functions import monotonically_increasing_id
 from pyspark.sql.window import Window
 from pyspark.sql.functions import row_number
+from pyspark.sql.functions import *
 
 
 
@@ -531,13 +531,17 @@ df_concept = spark.read.format("iceberg").load(f"bios.concept")
 #obtem o max person_id para usar na inserção de novos registros
 count_max_person_df = spark.sql("SELECT greatest(max(person_id),0) + 1 AS max_person FROM bios.person")
 count_max_person = count_max_person_df.first().max_person
+#geração dos id's únicos nos dados de entrada. O valor inicial é 0.
 
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 # a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
 # do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_sinasc_window = Window.orderBy(df_sinasc['CODMUNRES'])
+#df_sinasc_window = Window.partitionBy(df_sinasc['CODMUNRES']).orderBy(df_sinasc['CODMUNRES'])
 # nesse ponto o dataframe com os dados de entrada recebe a coluna person_id que será a chave de cada linha durante o etl.
-df_sinasc = df_sinasc.withColumn("person_id", row_number().over(df_sinasc_window))
+#df_sinasc = df_sinasc.withColumn("person_id", row_number().over(df_sinasc_window))
+
+# revendo a documentação do spark, a função monotonically_increasing_id() gera números incrementais com a garantia de ser sempre maior que os existentes.
+# a função row_number usanda anteriormente depende de ter o particionamento explicitado no seu uso, isso torna inviável.
+df_sinasc = df_sinasc.withColumn("person_id", monotonically_increasing_id())
 #sincroniza os id's gerados com o max(person_id) existente no banco de dados atualizando os registros no df antes de escrever no banco
 df_sinasc = df_sinasc.withColumn("person_id", df_sinasc["person_id"] + count_max_person)
 
