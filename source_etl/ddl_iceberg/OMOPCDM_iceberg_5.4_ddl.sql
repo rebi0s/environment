@@ -1,4 +1,47 @@
 --sql server CDM DDL Specification for OMOP Common Data Model 5.4
+--drop table concept;
+--drop table concept_classs;
+--drop table vocabulary;
+--drop table domain;
+--drop table location;
+--drop table care_site;
+--drop table provider;
+--drop table person;
+--drop table visit_occurrence;
+--drop table visit_detail;
+--drop table relationship;
+--drop table episode;
+--drop table note;
+--drop table cdm_source;
+--drop table cohort_definition;
+--drop table concept_ancestor;
+--drop table concept_synonym;
+--drop table condition_era;
+--drop table drug_era;
+--drop table episode_event;
+--drop table observation_period;
+--drop table concept_relationship;
+--drop table dose_era;
+--drop table fact_relationship;
+--drop table metadata;
+--drop table death;
+--drop table note_nlp;
+--drop table source_to_concept_map;
+--drop table cost;
+--drop table drug_strength;
+--drop table specimen;
+--drop table condition_occurrence;
+--drop table drug_exposure;
+--drop table procedure_occurrence;
+--drop table device_exposure;
+--drop table payer_plan_period;
+--drop table observation;
+--drop table measurement;
+--drop table cohort;
+
+
+
+
 --HINT DISTRIBUTE ON KEY (person_id)
 CREATE TABLE person (person_id bigint NOT NULL,gender_concept_id bigint NOT NULL,year_of_birth integer NOT NULL,month_of_birth integer,day_of_birth  integer,birth_timestamp timestamp,race_concept_id bigint NOT NULL,ethnicity_concept_id bigint NOT NULL,location_id bigint,provider_id bigint,care_site_id bigint,person_source_value string,gender_source_value string,gender_source_concept_id bigint,race_source_value string,race_source_concept_id bigint,ethnicity_source_value string,ethnicity_source_concept_id bigint ) using iceberg;
 --HINT DISTRIBUTE ON KEY (person_id)
@@ -78,26 +121,27 @@ CREATE TABLE cohort (cohort_definition_id bigint NOT NULL, subject_id bigint NOT
 --HINT DISTRIBUTE ON RANDOM
 CREATE TABLE cohort_definition (cohort_definition_id bigint NOT NULL, cohort_definition_name string NOT NULL, cohort_definition_description string, definition_type_concept_id bigint NOT NULL, cohort_definition_syntax string, subject_concept_id bigint NOT NULL, cohort_initiation_date timestamp ) using iceberg;
 
-Create table datasus_person (PERSON_ID  integer not null,         -- Relacionamento com a tabela PERSON do OMOP
-SOURCE_ID  integer not null,         -- Indica o sistema de origem dos dados (1-SINASC, 2-SIM)
-CODMUNNATU            integer,   -- Código do município de naturalidade da mãe
-CODOCUPMAE            integer,   -- Código de ocupação da mãe conforme tabela do CBO (Código Brasileiro de Ocupações).
-CODUFNATU             integer,   -- Código da UF de naturalidade da mãe
-DTNASCMAE             integer,   -- Data de nascimento da mãe: dd mm aaaa
-DTNASCMAE_timestamp      timestamp,   -- Data de nascimento da mãe em formato date
-ESCMAE                integer,   -- Escolaridade, em anos de estudo concluídos: 1 – Nenhuma; 2 – 1 a 3 anos; 3 – 4 a 7 anos; 4 – 8 a 11 anos; 5 – 12 e mais; 9 – Ignorado.
-ESCMAE2010            integer,   -- Escolaridade 2010. Valores: 0 – Sem escolaridade; 1 – Fundamental I (1ª a 4ª série) using iceberg; 2 – Fundamental II (5ª a 8ª série) using iceberg; 3 – Médio (antigo 2º Grau) using iceberg; 4 – Superior incompleto; 5 – Superior completo; 9 – Ignorado.
-ESCMAEAGR1            integer,   -- Escolaridade 2010 agregada. Valores: 00 – Sem Escolaridade; 01 – Fundamental I Incompleto; 02 – Fundamental I Completo; 03 – Fundamental II Incompleto; 04 – Fundamental II Completo; 05 – Ensino Médio Incompleto; 06 – Ensino Médio Completo; 07 – Superior Incompleto; 08 – Superior Completo; 09 – Ignorado; 10 – Fundamental I Incompleto ou Inespecífico; 11 – Fundamental II Incompleto ou Inespecífico; 12 – Ensino Médio Incompleto ou Inespecífico.   
-ESTCIVMAE             integer,   -- Situação conjugal da mãe: 1– Solteira; 2– Casada; 3– Viúva; 4– Separada judicialmente/divorciada; 5– União estável; 9– Ignorada.
-IDADEMAE              integer,   -- Idade da mãe
-NATURALMAE            integer,   -- Se a mãe for estrangeira, constará o código do país de nascimento.
-RACACORMAE            integer,   -- 1 Tipo de raça e cor da mãe: 1– Branca; 2– Preta; 3– Amarela; 4– Parda; 5– Indígena.
-SERIESCMAE            integer,   -- Série escolar da mãe. Valores de 1 a 8.
-IDADEPAI              integer,   -- Idade do pai
-TPDOCRESP             integer,   -- Tipo do documento do responsável. Valores: 1‐CNES; 2‐CRM; 3‐ COREN; 4‐RG; 5‐CPF.
-TPFUNCRESP            integer,   -- Tipo de função do responsável pelo preenchimento. Valores: 1– Médico; 2– Enfermeiro; 3– Parteira; 4– Funcionário do cartório; 5– Outros.
-IDANOMAL              integer,   -- Anomalia identificada: 1– Sim; 2– Não; 9– Ignorado
-LOCNASC               integer    -- Local de nascimento: 1 – Hospital; 2 – Outros estabelecimentos de saúde; 3 – Domicílio; 4 – Outros.
+Create table datasus_person (
+person_id  bigint not null,         -- relacionamento com a tabela person do omop
+system_source_id  integer not null,         -- indica o sistema de origem dos dados (1-sinasc, 2-sim)
+codmunnatu            integer,   -- código do município de naturalidade da mãe
+codocupmae            integer,   -- código de ocupação da mãe conforme tabela do cbo (código brasileiro de ocupações).
+codufnatu             integer,   -- código da uf de naturalidade da mãe
+dtnascmae             integer,   -- data de nascimento da mãe: dd mm aaaa
+dtnascmae_timestamp      timestamp,   -- data de nascimento da mãe em formato date
+escmae                integer,   -- escolaridade, em anos de estudo concluídos: 1 – nenhuma; 2 – 1 a 3 anos; 3 – 4 a 7 anos; 4 – 8 a 11 anos; 5 – 12 e mais; 9 – ignorado.
+escmae2010            integer,   -- escolaridade 2010. valores: 0 – sem escolaridade; 1 – fundamental i (1ª a 4ª série) using iceberg; 2 – fundamental ii (5ª a 8ª série) using iceberg; 3 – médio (antigo 2º grau) using iceberg; 4 – superior incompleto; 5 – superior completo; 9 – ignorado.
+escmaeagr1            integer,   -- escolaridade 2010 agregada. valores: 00 – sem escolaridade; 01 – fundamental i incompleto; 02 – fundamental i completo; 03 – fundamental ii incompleto; 04 – fundamental ii completo; 05 – ensino médio incompleto; 06 – ensino médio completo; 07 – superior incompleto; 08 – superior completo; 09 – ignorado; 10 – fundamental i incompleto ou inespecífico; 11 – fundamental ii incompleto ou inespecífico; 12 – ensino médio incompleto ou inespecífico.   
+estcivmae             integer,   -- situação conjugal da mãe: 1– solteira; 2– casada; 3– viúva; 4– separada judicialmente/divorciada; 5– união estável; 9– ignorada.
+idademae              integer,   -- idade da mãe
+naturalmae            integer,   -- se a mãe for estrangeira, constará o código do país de nascimento.
+racacormae            integer,   -- 1 tipo de raça e cor da mãe: 1– branca; 2– preta; 3– amarela; 4– parda; 5– indígena.
+seriescmae            integer,   -- série escolar da mãe. valores de 1 a 8.
+idadepai              integer,   -- idade do pai
+tpdocresp             integer,   -- tipo do documento do responsável. valores: 1‐cnes; 2‐crm; 3‐ coren; 4‐rg; 5‐cpf.
+tpfuncresp            integer,   -- tipo de função do responsável pelo preenchimento. valores: 1– médico; 2– enfermeiro; 3– parteira; 4– funcionário do cartório; 5– outros.
+idanomal              integer,   -- anomalia identificada: 1– sim; 2– não; 9– ignorado
+locnasc               integer    -- local de nascimento: 1 – hospital; 2 – outros estabelecimentos de saúde; 3 – domicílio; 4 – outros.
 ) using iceberg;			
 
 
