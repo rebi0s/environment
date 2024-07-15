@@ -9,7 +9,7 @@ from pyspark.sql.functions import monotonically_increasing_id
 from pyspark.sql.window import Window
 from pyspark.sql.functions import row_number
 from pyspark.sql.functions import *
-
+from utils import *
 
 
 # adding iceberg configs
@@ -753,20 +753,14 @@ df_obs_period.writeTo("bios.observation_period").append()
 #			condition_status_source_value varchar(50) NULL );
 
 
-spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
-values
-(df_condition_occur.identity, 
-df_sinasc.identity, 
-when df_sinasc.stdnepidem = 1 then 9999999 else 999999, 
-makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 
-32848, 
-df_sinasc.stdnepidem)""") # STDNEPIDEM	Status de DN Epidemiológica. Valores: 1 – SIM; 0 – NÃO.
-
 # *************************************************************
 #  CONDITION_OCCURRENCE - Persistência dos dados 
 #  A partir de um registro do source serão inseridos vários registros na tabela condition_occurrence, por isso, o dataframe é recriado trocando o campo de entrada.
 #  Source field: STDNEPIDEM
 # *************************************************************
+#spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
+#values
+#(df_condition_occur.identity, df_sinasc.identity, when df_sinasc.stdnepidem = 1 then 9999999 else 999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.stdnepidem)""") # STDNEPIDEM	Status de DN Epidemiológica. Valores: 1 – SIM; 0 – NÃO.
 
 # Definindo o novo esquema para suportar valores nulos e não-nulos.
 df_cond_occur_schema = StructType([ \
@@ -897,38 +891,208 @@ df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occu
 # persistindo os dados de observation_period no banco.
 df_cond_occur.writeTo("bios.condition_occurrence").append()
 
+# *************************************************************
+#  CONDITION_OCCURRENCE - Persistência dos dados 
+#  Source field: DTULTMENST
+# *************************************************************
+#spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
+#values
+#(df_condition_occur.identity, df_sinasc.identity, 4072438, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.dtultmenst)""") # DTULTMENST	Data da última menstruação (DUM): dd mm aaaa
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_cond_occur=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+                                lit(4072438).cast(LongType()).alias('condition_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+								df_sinasc.DTULTMENST.alias('condition_source_value')).rdd, \
+								df_cond_occur_schema)
 
-spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
-values
-(df_condition_occur.identity, df_sinasc.identity, 4072438, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.dtultmenst)""") # DTULTMENST	Data da última menstruação (DUM): dd mm aaaa
-spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
-values
-(df_condition_occur.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.gestacao)""")  # GESTACAO	Semanas de gestação: 1– Menos de 22 semanas; 2– 22 a 27 semanas; 3– 28 a 31 semanas; 4– 32 a 36 semanas; 5– 37 a 41 semanas; 6– 42 semanas e mais; 9– Ignorado.
-spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
-values
-(df_condition_occur.identity, df_sinasc.identity, when df_sinasc.gravidez = 1 then 4014295 when df_sinasc.gravidez = 2 then 4101844 when df_sinasc.gravidez = 3 then 4094046 else 999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.gravidez)""") # GRAVIDEZ	Tipo de gravidez: 1– Única; 2– Dupla; 3– Tripla ou mais; 9– Ignorado.
-spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
-values
-(df_condition_occur.identity, df_sinasc.identity, 4313474, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.consprenat)""")  # CONSPRENAT	Número de consultas pré‐natal
-spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
-values
-(df_condition_occur.identity, df_sinasc.identity, 4313474, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.consultas)""") # CONSULTAS	Número de consultas de pré‐natal. Valores: 1– Nenhuma; 2– de 1 a 3; 3– de 4 a 6; 4– 7 e mais; 9– Ignorado.
-spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
-values
-(df_condition_occur.identity, df_sinasc.identity, 9999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.mesprenat)""") # MESPRENAT	Mês de gestação em que iniciou o pré‐natal
-spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
-values
-(df_condition_occur.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.stcesparto)""") # STCESPARTO	Cesárea ocorreu antes do trabalho de parto iniciar? Valores: 1– Sim; 2– Não; 3– Não se aplica; 9– Ignorado.
-spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
-values
-(df_condition_occur.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.kotelchuck)""") # KOTELCHUCK	
-spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
-values
-(df_condition_occur.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.paridade)""") # PARIDADE	
-spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
-values
-(df_condition_occur.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.tpmetestim)""") # TPMETESTIM	Método utilizado. Valores: 1– Exame físico; 2– Outro método; 9– Ignorado.
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+# persistindo os dados de observation_period no banco.
+df_cond_occur.writeTo("bios.condition_occurrence").append()
 
+# *************************************************************
+#  CONDITION_OCCURRENCE - Persistência dos dados 
+#  Source field: GESTACAO
+# *************************************************************
+#spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
+#values
+#(df_condition_occur.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.gestacao)""")  # GESTACAO	Semanas de gestação: 1– Menos de 22 semanas; 2– 22 a 27 semanas; 3– 28 a 31 semanas; 4– 32 a 36 semanas; 5– 37 a 41 semanas; 6– 42 semanas e mais; 9– Ignorado.
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_cond_occur=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+								when(df_sinasc['GESTACAO'] == '1', 999999).\
+                                    when(df_sinasc['GESTACAO'] == '2', 999999).\
+                                    when(df_sinasc['GESTACAO'] == '3', 999999).\
+                                    when(df_sinasc['GESTACAO'] == '4', 999999).\
+                                    when(df_sinasc['GESTACAO'] == '5', 999999).\
+                                    when(df_sinasc['GESTACAO'] == '6', 999999).\
+                                    otherwise(999999).alias('condition_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+								df_sinasc.GESTACAO.alias('condition_source_value')).rdd, \
+								df_cond_occur_schema)
+
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+# persistindo os dados de observation_period no banco.
+df_cond_occur.writeTo("bios.condition_occurrence").append()
+
+
+# *************************************************************
+#  CONDITION_OCCURRENCE - Persistência dos dados 
+#  Source field: GRAVIDEZ
+# *************************************************************
+#spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
+#values
+#(df_condition_occur.identity, df_sinasc.identity, when df_sinasc.gravidez = 1 then 4014295 when df_sinasc.gravidez = 2 then 4101844 when df_sinasc.gravidez = 3 then 4094046 else 999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.gravidez)""") # GRAVIDEZ	Tipo de gravidez: 1– Única; 2– Dupla; 3– Tripla ou mais; 9– Ignorado.
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_cond_occur=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+								when(df_sinasc['GRAVIDEZ'] == '1', 999999).\
+                                    when(df_sinasc['GRAVIDEZ'] == '2', 999999).\
+                                    when(df_sinasc['GRAVIDEZ'] == '3', 999999).\
+                                    otherwise(999999).alias('condition_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+								df_sinasc.GRAVIDEZ.alias('condition_source_value')).rdd, \
+								df_cond_occur_schema)
+
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+# persistindo os dados de observation_period no banco.
+df_cond_occur.writeTo("bios.condition_occurrence").append()
+
+# *************************************************************
+#  CONDITION_OCCURRENCE - Persistência dos dados 
+#  Source field: CONSPRENAT
+# *************************************************************
+#spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
+#values
+#(df_condition_occur.identity, df_sinasc.identity, 4313474, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.consprenat)""")  # CONSPRENAT	Número de consultas pré‐natal
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_cond_occur=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+								lit(4313474).cast(LongType()).alias('condition_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+								df_sinasc.CONSPRENAT.alias('condition_source_value')).rdd, \
+								df_cond_occur_schema)
+
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+# persistindo os dados de observation_period no banco.
+df_cond_occur.writeTo("bios.condition_occurrence").append()
+
+# *************************************************************
+#  CONDITION_OCCURRENCE - Persistência dos dados 
+#  Source field: KOTELCHUCK
+# *************************************************************
+#spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
+#values
+#(df_condition_occur.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.kotelchuck)""") # KOTELCHUCK	1 Não fez pré-natal (Campo33=0); 2 Inadequado (Campo34>3 ou Campo34<=3 e Campo33<3); 3 Intermediário (Campo34<=3 e Campo33 entre 3 e 5); 4 Adequado (Campo34<=3 e Campo33=6); 5 Mais que adequado (Campo34<=3 e Campo33>=7); 6 Não Classificados (campos 33 ou 34, Nulo ou Ign)
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_cond_occur=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+								when(df_sinasc['KOTELCHUCK'] == '1', 999999).\
+                                    when(df_sinasc['KOTELCHUCK'] == '2', 999999).\
+                                    when(df_sinasc['KOTELCHUCK'] == '3', 999999).\
+                                    when(df_sinasc['KOTELCHUCK'] == '4', 999999).\
+                                    when(df_sinasc['KOTELCHUCK'] == '5', 999999).\
+                                    otherwise(999999).alias('condition_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+								df_sinasc.KOTELCHUCK.alias('condition_source_value')).rdd, \
+								df_cond_occur_schema)
+
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+# persistindo os dados de observation_period no banco.
+df_cond_occur.writeTo("bios.condition_occurrence").append()
+
+# *************************************************************
+#  CONDITION_OCCURRENCE - Persistência dos dados 
+#  Source field: TPMETESTIM
+# *************************************************************
+#spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
+#values
+#(df_condition_occur.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.tpmetestim)""") # TPMETESTIM	Método utilizado. Valores: 1– Exame físico; 2– Outro método; 9– Ignorado.
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_cond_occur=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+								when(df_sinasc['TPMETESTIM'] == '1', 999999).\
+                                    when(df_sinasc['TPMETESTIM'] == '2', 999999).\
+                                    otherwise(999999).alias('condition_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+								df_sinasc.TPMETESTIM.alias('condition_source_value')).rdd, \
+								df_cond_occur_schema)
+
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+# persistindo os dados de observation_period no banco.
+df_cond_occur.writeTo("bios.condition_occurrence").append()
 
 # registro da procedure_occurrence
 #CREATE TABLE procedure_occurrence (
@@ -949,12 +1113,192 @@ values
 #			procedure_source_concept_id integer NULL,
 #			modifier_source_value varchar(50) NULL );
 
-spark.sql("""insert into procedure_occurrence(procedure_occurrence_id,person_id,procedure_concept_id,procedure_date,procedure_type_concept_id,procedure_source_value)
-values (
-(df_procedure_occurrence.identity, df_sinasc.identity, case when df_sinasc.parto = 1 then 999999 when df_sinasc.parto = 2 then 4015701 else 9999999), makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.parto)""") # PARTO	Tipo de parto: 1– Vaginal; 2– Cesário; 9– Ignorado
-spark.sql("""insert into procedure_occurrence(procedure_occurrence_id,person_id,procedure_concept_id,procedure_date,procedure_type_concept_id,procedure_source_value)
-values (
-(df_procedure_occurrence.identity, df_sinasc.identity, case when df_sinasc.sttrabpart = 1 then 4121586 when df_sinasc.sttrabpart = 2 then 9999999 when df_sinasc.sttrabpart = 3 then 999999 else 9999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.sttrabpart)""") # STTRABPART	Trabalho de parto induzido? Valores: 1– Sim; 2– Não; 3– Não se aplica; 9– Ignorado.
+# *************************************************************
+#  PROCEDURE_OCCURRENCE - Persistência dos dados 
+#  A partir de um registro do source serão inseridos vários registros na tabela procedure_occurrence, por isso, o dataframe é recriado trocando o campo de entrada.
+# *************************************************************
+# Definindo o novo esquema para suportar valores nulos e não-nulos.
+df_proc_occur_schema = StructType([ \
+StructField("procedure_occurrence_id", LongType(), False), \
+StructField("person_id", LongType(), False), \
+StructField("procedure_concept_id", LongType(), False), \
+StructField("procedure_date", DateType(), False), \
+StructField("procedure_end_date", DateType(), True), \
+StructField("procedure_type_concept_id", LongType(), False), \
+StructField("procedure_source_value", StringType(), True) \
+])
+
+# *************************************************************
+#  PROCEDURE_OCCURRENCE - Persistência dos dados 
+#  A partir de um registro do source serão inseridos vários registros na tabela procedure_occurrence, por isso, o dataframe é recriado trocando o campo de entrada.
+#  Source field: PARTO
+# *************************************************************
+#spark.sql("""insert into procedure_occurrence(procedure_occurrence_id,person_id,procedure_concept_id,procedure_date,procedure_type_concept_id,procedure_source_value)
+#values (
+#(df_procedure_occurrence.identity, df_sinasc.identity, case when df_sinasc.parto = 1 then 999999 when df_sinasc.parto = 2 then 4015701 else 9999999), makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.parto)""") # PARTO	Tipo de parto: 1– Vaginal; 2– Cesário; 9– Ignorado
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_proc_occur=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+								when(df_sinasc['PARTO'] == '1', 999999).\
+								when(df_sinasc['PARTO'] == '2', 999999).\
+                                otherwise(999998).alias('procedure_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
+								lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+								df_sinasc.PARTO.alias('procedure_source_value')).rdd, \
+								df_proc_occur_schema)
+
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
+count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+# persistindo os dados de observation_period no banco.
+df_proc_occur.writeTo("bios.procedure_occurrence").append()
+
+# *************************************************************
+#  PROCEDURE_OCCURRENCE - Persistência dos dados 
+#  A partir de um registro do source serão inseridos vários registros na tabela procedure_occurrence, por isso, o dataframe é recriado trocando o campo de entrada.
+#  Source field: STTRABPART
+# *************************************************************
+#spark.sql("""insert into procedure_occurrence(procedure_occurrence_id,person_id,procedure_concept_id,procedure_date,procedure_type_concept_id,procedure_source_value)
+#values (
+#(df_procedure_occurrence.identity, df_sinasc.identity, case when df_sinasc.sttrabpart = 1 then 4121586 when df_sinasc.sttrabpart = 2 then 9999999 when df_sinasc.sttrabpart = 3 then 999999 else 9999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.sttrabpart)""") # STTRABPART	Trabalho de parto induzido? Valores: 1– Sim; 2– Não; 3– Não se aplica; 9– Ignorado.
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_proc_occur=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+								when(df_sinasc['STTRABPART'] == '1', 4121586).\
+								when(df_sinasc['STTRABPART'] == '2', 999999).\
+								when(df_sinasc['STTRABPART'] == '3', 999999).\
+                                otherwise(999998).alias('procedure_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
+								lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+								df_sinasc.STTRABPART.alias('procedure_source_value')).rdd, \
+								df_proc_occur_schema)
+
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
+count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+# persistindo os dados de observation_period no banco.
+df_proc_occur.writeTo("bios.procedure_occurrence").append()
+
+# *************************************************************
+#  PROCEDURE_OCCURRENCE - Persistência dos dados 
+#  A partir de um registro do source serão inseridos vários registros na tabela procedure_occurrence, por isso, o dataframe é recriado trocando o campo de entrada.
+#  Source field: CONSULTAS
+# *************************************************************
+#spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
+#values
+#(df_condition_occur.identity, df_sinasc.identity, montar mapeamento via vocabulário climaterna, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.consultas)""") # CONSULTAS	Número de consultas de pré‐natal. Valores: 1– Nenhuma; 2– de 1 a 3; 3– de 4 a 6; 4– 7 e mais; 9– Ignorado.
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_proc_occur=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+								when(df_sinasc['CONSULTAS'] == '1', 999999).\
+								when(df_sinasc['CONSULTAS'] == '2', 999999).\
+								when(df_sinasc['CONSULTAS'] == '3', 999999).\
+								when(df_sinasc['CONSULTAS'] == '4', 999999).\
+                                otherwise(999998).alias('procedure_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
+								lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+								df_sinasc.CONSULTAS.alias('procedure_source_value')).rdd, \
+								df_proc_occur_schema)
+
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
+count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+# persistindo os dados de observation_period no banco.
+df_proc_occur.writeTo("bios.procedure_occurrence").append()
+
+# *************************************************************
+#  PROCEDURE_OCCURRENCE - Persistência dos dados 
+#  A partir de um registro do source serão inseridos vários registros na tabela procedure_occurrence, por isso, o dataframe é recriado trocando o campo de entrada.
+#  Source field: MESPRENAT
+# *************************************************************
+#spark.sql("""insert into procedure_occurrence(procedure_occurrence_id,person_id,procedure_concept_id,procedure_start_date,procedure_type_concept_id, procedure_source_value)
+#values
+#(df_condition_occur.identity, df_sinasc.identity, 9999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.mesprenat)""") # MESPRENAT	Mês de gestação em que iniciou o pré‐natal
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_proc_occur=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+								lit(999999).cast(LongType()).alias('procedure_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
+								lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+								df_sinasc.MESPRENAT.alias('procedure_source_value')).rdd, \
+								df_proc_occur_schema)
+
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
+count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+# persistindo os dados de observation_period no banco.
+df_proc_occur.writeTo("bios.procedure_occurrence").append()
+
+# *************************************************************
+#  PROCEDURE_OCCURRENCE - Persistência dos dados 
+#  A partir de um registro do source serão inseridos vários registros na tabela procedure_occurrence, por isso, o dataframe é recriado trocando o campo de entrada.
+#  Source field: STCESPARTO
+# *************************************************************
+#spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
+#values
+#(df_condition_occur.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.stcesparto)""") # STCESPARTO	Cesárea ocorreu antes do trabalho de parto iniciar? Valores: 1– Sim; 2– Não; 3– Não se aplica; 9– Ignorado.
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_proc_occur=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+								when(df_sinasc['STCESPARTO'] == '1', 999999).\
+								when(df_sinasc['STCESPARTO'] == '2', 999999).\
+								when(df_sinasc['STCESPARTO'] == '3', 999999).\
+                                otherwise(999998).alias('procedure_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
+								lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+								df_sinasc.STCESPARTO.alias('procedure_source_value')).rdd, \
+								df_proc_occur_schema)
+
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
+count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+# persistindo os dados de observation_period no banco.
+df_proc_occur.writeTo("bios.procedure_occurrence").append()
 
 
 # resgistro do measurement
@@ -983,20 +1327,143 @@ values (
 #			measurement_event_id integer NULL,
 #			meas_event_field_concept_id integer NULL );
 
-spark.sql("""insert into measurement (measurement_id,person_id,measurement_concept_id,measurement_date,measurement_type_concept_id,   # usado type_concept  Government Report 32848value_as_number,measurement_source_value)
-values (
-(df_measurement.identity, df_sinasc.identity, 9999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.tprobson, df_sinasc.tprobson)""") # TPROBSON	Código do Grupo de Robson, gerado pelo sistema
-spark.sql("""insert into measurement (measurement_id,person_id,measurement_concept_id,measurement_date,measurement_type_concept_id,   # usado type_concept  Government Report 32848value_as_number,measurement_source_value)
-values (
-(df_measurement.identity, df_sinasc.identity, 4014304, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.apgar1, df_sinasc.apgar1)""") # APGAR1	Apgar no 1º minuto
-spark.sql("""insert into measurement (measurement_id,person_id,measurement_concept_id,measurement_date,measurement_type_concept_id,   # usado type_concept  Government Report 32848value_as_number,measurement_source_value)
-values (
-(df_measurement.identity, df_sinasc.identity, 4016464, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.apgar5, df_sinasc.apgar5)""") # APGAR5	Apgar no 5º minuto
-spark.sql("""insert into measurement (measurement_id,person_id,measurement_concept_id,measurement_date,measurement_type_concept_id,   # usado type_concept  Government Report 32848value_as_number,measurement_source_value)
-values (
-(df_measurement.identity, df_sinasc.identity, 4264825, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.peso, df_sinasc.peso)""") # PESO	Peso ao nascer em gramas.
+# *************************************************************
+#  MEASUREMENT - Persistência dos dados 
+#  A partir de um registro do source serão inseridos vários registros na tabela measurement, por isso, o dataframe é recriado trocando o campo de entrada.
+# *************************************************************
+# Definindo o novo esquema para suportar valores nulos e não-nulos.
+df_measurement_schema = StructType([ \
+StructField("measurement_occurrence_id", LongType(), False), \
+StructField("person_id", LongType(), False), \
+StructField("measurement_concept_id", LongType(), False), \
+StructField("measurement_date", DateType(), False), \
+StructField("measurement_type_concept_id", LongType(), False), \
+StructField("measurement_source_value", StringType(), True) \
+])
 
+# *************************************************************
+#  MEASUREMENT - Persistência dos dados 
+#  A partir de um registro do source serão inseridos vários registros na tabela measurement, por isso, o dataframe é recriado trocando o campo de entrada.
+#  Source field: TPROBSON
+# *************************************************************
+#spark.sql("""insert into measurement (measurement_id,person_id,measurement_concept_id,measurement_date,measurement_type_concept_id,   # usado type_concept  Government Report 32848value_as_number,measurement_source_value)
+#values (
+#(df_measurement.identity, df_sinasc.identity, 9999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.tprobson, df_sinasc.tprobson)""") # TPROBSON	Código do Grupo de Robson, gerado pelo sistema
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_measurement=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('measurement_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+								lit(9999999).cast(LongType()).alias('measurement_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
+								lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
+								df_sinasc.TPROBSON.alias('measurement_source_value')).rdd, \
+								df_measurement_schema)
 
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
+count_max_measurement = count_max_measurement_df.first().max_measurement
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_measurement = df_measurement.withColumn("measurement_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
+# persistindo os dados de observation_period no banco.
+df_measurement.writeTo("bios.measurement").append()
+
+# *************************************************************
+#  MEASUREMENT - Persistência dos dados 
+#  A partir de um registro do source serão inseridos vários registros na tabela measurement, por isso, o dataframe é recriado trocando o campo de entrada.
+#  Source field: APGAR1
+# *************************************************************
+#spark.sql("""insert into measurement (measurement_id,person_id,measurement_concept_id,measurement_date,measurement_type_concept_id,   # usado type_concept  Government Report 32848value_as_number,measurement_source_value)
+#values (
+#(df_measurement.identity, df_sinasc.identity, 4014304, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.apgar1, df_sinasc.apgar1)""") # APGAR1	Apgar no 1º minuto
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_measurement=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('measurement_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+								lit(4014304).cast(LongType()).alias('measurement_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
+								lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
+								df_sinasc.APGAR1.alias('measurement_source_value')).rdd, \
+								df_measurement_schema)
+
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
+count_max_measurement = count_max_measurement_df.first().max_measurement
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_measurement = df_measurement.withColumn("measurement_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
+# persistindo os dados de observation_period no banco.
+df_measurement.writeTo("bios.measurement").append()
+
+# *************************************************************
+#  MEASUREMENT - Persistência dos dados 
+#  A partir de um registro do source serão inseridos vários registros na tabela measurement, por isso, o dataframe é recriado trocando o campo de entrada.
+#  Source field: APGAR5
+# *************************************************************
+#spark.sql("""insert into measurement (measurement_id,person_id,measurement_concept_id,measurement_date,measurement_type_concept_id,   # usado type_concept  Government Report 32848value_as_number,measurement_source_value)
+#values (
+#(df_measurement.identity, df_sinasc.identity, 4016464, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.apgar5, df_sinasc.apgar5)""") # APGAR5	Apgar no 5º minuto
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_measurement=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('measurement_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+								lit(4016464).cast(LongType()).alias('measurement_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
+								lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
+								df_sinasc.APGAR5.alias('measurement_source_value')).rdd, \
+								df_measurement_schema)
+
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
+count_max_measurement = count_max_measurement_df.first().max_measurement
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_measurement = df_measurement.withColumn("measurement_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
+# persistindo os dados de observation_period no banco.
+df_measurement.writeTo("bios.measurement").append()
+
+# *************************************************************
+#  MEASUREMENT - Persistência dos dados 
+#  A partir de um registro do source serão inseridos vários registros na tabela measurement, por isso, o dataframe é recriado trocando o campo de entrada.
+#  Source field: PESO
+# *************************************************************
+#spark.sql("""insert into measurement (measurement_id,person_id,measurement_concept_id,measurement_date,measurement_type_concept_id,   # usado type_concept  Government Report 32848value_as_number,measurement_source_value)
+#values (
+#(df_measurement.identity, df_sinasc.identity, 4264825, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.peso, df_sinasc.peso)""") # PESO	Peso ao nascer em gramas.
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_measurement=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('measurement_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+								lit(4264825).cast(LongType()).alias('measurement_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
+								lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
+								df_sinasc.PESO.alias('measurement_source_value')).rdd, \
+								df_measurement_schema)
+
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
+count_max_measurement = count_max_measurement_df.first().max_measurement
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_measurement = df_measurement.withColumn("measurement_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
+# persistindo os dados de observation_period no banco.
+df_measurement.writeTo("bios.measurement").append()
 
 #registro observation
 #CREATE TABLE observation (
@@ -1023,72 +1490,136 @@ values (
 #			obs_event_field_concept_id integer NULL );
 # usado type_concept  Government Report 32848
 
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, 35810075, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.idademae	 , df_sinasc.idademae	 )""") # IDADEMAE	Idade da mãe
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, 35810331, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.idadepai	 , df_sinasc.idadepai	 )"") # IDADEPAI	Idade do pai
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.qtdfilmort, df_sinasc.qtdfilmort   )""") # QTDFILMORT	Número de filhos mortos
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.qtdfilvivo, df_sinasc.qtdfilvivo   )""") # QTDFILVIVO	Número de filhos vivos
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.qtdgestant, df_sinasc.qtdgestant   )""") # QTDGESTANT	Número de gestações anteriores
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.qtdpartces, df_sinasc.qtdpartces   )""") # QTDPARTCES	Número de partos cesáreos
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.qtdpartnor, df_sinasc.qtdpartnor   )""") # QTDPARTNOR	Número de partos vaginais
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.dtnascmae	, df_sinasc.dtnascmae	 )""") # DTNASCMAE	Data de nascimento da mãe: dd mm aaaa
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.racacormae, df_sinasc.racacormae   )""") # RACACORMAE	1 Tipo de raça e cor da mãe: 1– Branca; 2– Preta; 3– Amarela; 4– Parda; 5– Indígena.
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.codmunnasc, df_sinasc.codmunnasc   )""") # CODMUNNASC	Código do município de nascimento
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.codmunnatu, df_sinasc.codmunnatu   )""") # CODMUNNATU	Código do município de naturalidade da mãe
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.codocupmae, df_sinasc.codocupmae   )""") # CODOCUPMAE	Código de ocupação da mãe conforme tabela do CBO (Código Brasileiro de Ocupações).
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.codufnatu	, df_sinasc.codufnatu	 )""") # CODUFNATU	Código da UF de naturalidade da mãe
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.dtregcart	, df_sinasc.dtregcart	 )""") # DTREGCART	Data do registro no cartório
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.escmae	 	 , df_sinasc.escmae	 	  )""") # ESCMAE		Escolaridade, em anos de estudo concluídos: 1 – Nenhuma; 2 – 1 a 3 anos; 3 – 4 a 7 anos; 4 – 8 a 11 anos; 5 – 12 e mais; 9 – Ignorado.
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.escmae2010, df_sinasc.escmae2010   )""") # ESCMAE2010	Escolaridade 2010. Valores: 0 – Sem escolaridade; 1 – Fundamental I (1ª a 4ª série); 2 – Fundamental II (5ª a 8ª série); 3 – Médio (antigo 2º Grau); 4 – Superior incompleto; 5 – Superior completo; 9 – Ignorado.
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.escmaeagr1, df_sinasc.escmaeagr1   )""") # ESCMAEAGR1	Escolaridade 2010 agregada. Valores: 00 – Sem Escolaridade; 01 – Fundamental I Incompleto; 02 – Fundamental I Completo; 03 – Fundamental II Incompleto; 04 – Fundamental II Completo; 05 – Ensino Médio Incompleto; 06 – Ensino Médio Completo; 07 – Superior Incompleto; 08 – Superior Completo; 09 – Ignorado; 10 – Fundamental I Incompleto ou Inespecífico; 11 – Fundamental II Incompleto ou Inespecífico; 12 – Ensino Médio Incompleto ou Inespecífico.
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.estcivmae	, df_sinasc.estcivmae	 )""") # ESTCIVMAE	Situação conjugal da mãe: 1– Solteira; 2– Casada; 3– Viúva; 4– Separada judicialmente/divorciada; 5– União estável; 9– Ignorada.
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.naturalmae, df_sinasc.naturalmae   )""") # NATURALMAE	Se a mãe for estrangeira, constará o código do país de nascimento.
-spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-values (
-(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.seriescmae, df_sinasc.seriescmae   )""") # SERIESCMAE	Série escolar da mãe. Valores de 1 a 8.
+# *************************************************************
+#  OBSERVATION - Persistência dos dados 
+#  A partir de um registro do source serão inseridos vários registros na tabela observation, por isso, o dataframe é recriado trocando o campo de entrada.
+# *************************************************************
+# Definindo o novo esquema para suportar valores nulos e não-nulos.
+df_observation_schema = StructType([ \
+StructField("observation_id", LongType(), False), \
+StructField("person_id", LongType(), False), \
+StructField("observation_concept_id", LongType(), False), \
+StructField("observation_date", DateType(), False), \
+StructField("observation_type_concept_id", LongType(), False), \
+StructField("observation_source_value", StringType(), True) \
+])
 
+# *************************************************************
+#  OBSERVATION - Persistência dos dados 
+#  A partir de um registro do source serão inseridos vários registros na tabela observation, por isso, o dataframe é recriado trocando o campo de entrada.
+#  Source field: PARIDADE
+# *************************************************************
+#spark.sql("""insert into observation(observation_id,person_id,observation_concept_id,observation_start_date,observation_type_concept_id, observation_source_value)
+#values
+#(df_condition_occur.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.paridade)""") # PARIDADE	
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_observation=spark.createDataFrame(df_sinasc.select( \
+								lit(0).cast(LongType()).alias('observation_id'), \
+								df_sinasc.person_id.alias('person_id'), \
+								lit(9999999).cast(LongType()).alias('observation_concept_id'), \
+								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("observation_date"), \
+								lit(32848).cast(LongType()).alias('observation_type_concept_id'), \
+								df_sinasc.PARIDADE.alias('observation_source_value')).rdd, \
+								df_observation_schema)
 
+#obtem o max da tabela para usar na inserção de novos registros
+count_max_observation_df = spark.sql("SELECT greatest(max(observation_id),0) + 1 AS max_observation FROM bios.observation")
+count_max_observation = count_max_observation_df.first().max_observation
+#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+df_observation = df_observation.withColumn("observation_id", monotonically_increasing_id())
+#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+df_observation = df_observation.withColumn("observation_id", df_observation["observation_id"] + count_max_observation)
+# persistindo os dados de observation_period no banco.
+df_observation.writeTo("bios.observation").append()
 
+#registro datasus_person (extension table to receive extras fields from SINASC/SIM)
+#Create table datasus_person (
+# person_id  bigint not null,
+# system_source_id  integer not null, 
+# city_origin integer,
+# mother_city integer,
+# state_origin  integer,
+# mother_birth_date_source_value integer,
+# mother_birth_date date,
+# mother_years_of_study integer,
+# mother_education_level integer,
+# mother_education_level_aggregated integer,
+# mother_marital_status  integer,
+# mother_age   integer,
+# mother_city_of_birth integer,
+# mother_race integer,
+# mother_elementary_school integer,
+# father_age   integer,
+# responsible_document_type  integer,
+# responsible_role_type integer,
+# place_of_birth_type_source_value integer, 
+# care_site_of_birth_source_value integer) 
+# using iceberg;
 
 #insert into person_ext
 #(df_condition_occur.identity, df_sinasc.identity, when df_sinasc.tpdocresp = 1 then 9999999 when df_sinasc.tpdocresp = 2 then when df_sinasc.tpdocresp = 3 then 999999 when df_sinasc.tpdocresp = 4 then 9999999 else 999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.tpdocresp), # TPDOCRESP	Tipo do documento do responsável. Valores: 1‐CNES; 2‐CRM; 3‐ COREN; 4‐RG; 5‐CPF.
 #(df_condition_occur.identity, df_sinasc.identity, when df_sinasc.tpfuncresp = 1 then 4000621 when df_sinasc.tpfuncresp = 2 then 32581 when df_sinasc.tpfuncresp = 3 then 40561317 when df_sinasc.tpnascassi = 4 then 999999 else 9999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.tpfuncresp), # TPFUNCRESP	Tipo de função do responsável pelo preenchimento. Valores: 1– Médico; 2– Enfermeiro; 3– Parteira; 4– Funcionário do cartório; 5– Outros.
-#
 #(df_condition_occur.identity, df_sinasc.identity, when df_sinasc.idanomal = 1 then df_sinasc.anomalia when df_sinasc.idanomal = 2 then 9999999 else 999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.idanomal), # IDANOMAL	Anomalia identificada: 1– Sim; 2– Não; 9– Ignorado
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, 35810075, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.idademae	 , df_sinasc.idademae	 )""") # IDADEMAE	Idade da mãe
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, 35810331, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.idadepai	 , df_sinasc.idadepai	 )""") # IDADEPAI	Idade do pai
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.qtdfilmort, df_sinasc.qtdfilmort   )""") # QTDFILMORT	Número de filhos mortos
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.qtdfilvivo, df_sinasc.qtdfilvivo   )""") # QTDFILVIVO	Número de filhos vivos
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.qtdgestant, df_sinasc.qtdgestant   )""") # QTDGESTANT	Número de gestações anteriores
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.qtdpartces, df_sinasc.qtdpartces   )""") # QTDPARTCES	Número de partos cesáreos
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.qtdpartnor, df_sinasc.qtdpartnor   )""") # QTDPARTNOR	Número de partos vaginais
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.dtnascmae	, df_sinasc.dtnascmae	 )""") # DTNASCMAE	Data de nascimento da mãe: dd mm aaaa
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.racacormae, df_sinasc.racacormae   )""") # RACACORMAE	1 Tipo de raça e cor da mãe: 1– Branca; 2– Preta; 3– Amarela; 4– Parda; 5– Indígena.
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.codmunnasc, df_sinasc.codmunnasc   )""") # CODMUNNASC	Código do município de nascimento
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.codmunnatu, df_sinasc.codmunnatu   )""") # CODMUNNATU	Código do município de naturalidade da mãe
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.codocupmae, df_sinasc.codocupmae   )""") # CODOCUPMAE	Código de ocupação da mãe conforme tabela do CBO (Código Brasileiro de Ocupações).
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.codufnatu	, df_sinasc.codufnatu	 )""") # CODUFNATU	Código da UF de naturalidade da mãe
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.dtregcart	, df_sinasc.dtregcart	 )""") # DTREGCART	Data do registro no cartório
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.escmae	 	 , df_sinasc.escmae	 	  )""") # ESCMAE		Escolaridade, em anos de estudo concluídos: 1 – Nenhuma; 2 – 1 a 3 anos; 3 – 4 a 7 anos; 4 – 8 a 11 anos; 5 – 12 e mais; 9 – Ignorado.
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.escmae2010, df_sinasc.escmae2010   )""") # ESCMAE2010	Escolaridade 2010. Valores: 0 – Sem escolaridade; 1 – Fundamental I (1ª a 4ª série); 2 – Fundamental II (5ª a 8ª série); 3 – Médio (antigo 2º Grau); 4 – Superior incompleto; 5 – Superior completo; 9 – Ignorado.
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.escmaeagr1, df_sinasc.escmaeagr1   )""") # ESCMAEAGR1	Escolaridade 2010 agregada. Valores: 00 – Sem Escolaridade; 01 – Fundamental I Incompleto; 02 – Fundamental I Completo; 03 – Fundamental II Incompleto; 04 – Fundamental II Completo; 05 – Ensino Médio Incompleto; 06 – Ensino Médio Completo; 07 – Superior Incompleto; 08 – Superior Completo; 09 – Ignorado; 10 – Fundamental I Incompleto ou Inespecífico; 11 – Fundamental II Incompleto ou Inespecífico; 12 – Ensino Médio Incompleto ou Inespecífico.
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.estcivmae	, df_sinasc.estcivmae	 )""") # ESTCIVMAE	Situação conjugal da mãe: 1– Solteira; 2– Casada; 3– Viúva; 4– Separada judicialmente/divorciada; 5– União estável; 9– Ignorada.
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.naturalmae, df_sinasc.naturalmae   )""") # NATURALMAE	Se a mãe for estrangeira, constará o código do país de nascimento.
+#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
+#values (
+#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.seriescmae, df_sinasc.seriescmae   )""") # SERIESCMAE	Série escolar da mãe. Valores de 1 a 8.
