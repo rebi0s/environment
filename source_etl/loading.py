@@ -2,6 +2,7 @@
 import os
 import sys
 import logging
+from datetime import datetime
 from pyspark import SparkConf
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DateType, TimestampType, LongType
@@ -11,35 +12,17 @@ from pyspark.sql.functions import row_number
 from pyspark.sql.functions import *
 from utils import *
 
+spark = initSpark()
 
-# adding iceberg configs
-conf = (
-    SparkConf()
-    .set("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
-    .set("spark.sql.catalog.bios", "org.apache.iceberg.spark.SparkCatalog")
-    .set("spark.sql.catalog.bios.catalog-impl", "org.apache.iceberg.jdbc.JdbcCatalog")
-    .set("spark.sql.catalog.bios.uri", "jdbc:postgresql://host.docker.internal:5420/db_iceberg")
-    .set("spark.sql.catalog.bios.jdbc.user", "icbergcat")
-    .set("spark.sql.catalog.bios.jdbc.password", "hNXz35UBRcAC")
-    .set("spark.sql.catalog.bios.jdbc.schema-version=V1")
-    .set("spark.sql.catalog.bios.warehouse", os.getenv("CTRNA_CATALOG_WAREHOUSE", "s3a://bios/"))
-    .set("spark.sql.catalog.bios.io-impl", "org.apache.iceberg.aws.s3.S3FileIO")
-    .set("spark.sql.catalog.bios.s3.endpoint", os.getenv("CTRNA_CATALOG_S3_ENDPOINT","http://172.17.0.1:9000"))
-    .set("spark.sql.catalog.spark_catalog","org.apache.iceberg.spark.SparkSessionCatalog")
-    .set("spark.sql.catalogImplementation", "in-memory")
-    .set("spark.sql.defaultCatalog", os.getenv("CTRNA_CATALOG_DEFAULT","bios")) # Name of the Iceberg catalog
-)
+data_atual = datetime.now().strftime('%Y%m%d')
+log_path = os.getenv("CTRNA_LOG_PATH", "/home/src/etl/")
+file_name = f'{log_path}ingestion_{data_atual}.log'
+log_handler = utlLogInit('main','INFO',file_name)
 
-spark = SparkSession.builder.config(conf=conf).getOrCreate()
+# Mensagens de log
+logger.info('mensagem de informação')
 
-# spark = SparkSession.builder.master("local[*]") \
-#                     .appName('Rebios') \
-#                     .getOrCreate()
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("rebiosparkJob")
-
-logger.info("Inicialização.")
 
 #ordem de inserção segundo a dependência entre as tabelas
 #OMOP Version 5.4
@@ -601,9 +584,11 @@ lit(None).cast(StringType()).alias('ethnicity_source_concept_id') \
 ).rdd, \
 df_person_schema)
 
+if df_person.count() > 0:
 # Persistindo os dados de person no banco.
-df_person.writeTo("bios.person").append()
-
+	df_person.writeTo("bios.person").append()
+else:
+	exit()
 # *************************************************************
 #  OBSERVATION_PERIOD - Persistência dos dados 
 # *************************************************************
@@ -632,22 +617,18 @@ df_obs_period=spark.createDataFrame(df_sinasc.select(\
                       to_timestamp(concat(lpad(df_sinasc.DTNASC,8,'0'), lit(' '), lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('observation_period_end_date'), \
                       lit(4193440).alias('period_type_concept_id')).rdd, \
                       df_obs_period_schema)
-
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_obs_period_df = spark.sql("SELECT greatest(max(observation_period_id),0) + 1 AS max_obs_period FROM bios.observation_period")
-count_max_obs_period = count_max_obs_period_df.first().max_obs_period
-
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_obs_period = df_obs_period.withColumn("observation_period_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_obs_period = df_obs_period.withColumn("observation_period_id", df_obs_period["observation_period_id"] + count_max_obs_period)
-# persistindo os dados de observation_period no banco.
-df_obs_period.writeTo("bios.observation_period").append()
-
-
-
+if df_obs_period.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_obs_period_df = spark.sql("SELECT greatest(max(observation_period_id),0) + 1 AS max_obs_period FROM bios.observation_period")
+	count_max_obs_period = count_max_obs_period_df.first().max_obs_period
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_obs_period = df_obs_period.withColumn("observation_period_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_obs_period = df_obs_period.withColumn("observation_period_id", df_obs_period["observation_period_id"] + count_max_obs_period)
+	# persistindo os dados de observation_period no banco.
+	df_obs_period.writeTo("bios.observation_period").append()
 
 
 
@@ -785,17 +766,18 @@ df_cond_occur=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.STDNEPIDEM.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
-count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
-# persistindo os dados de observation_period no banco.
-df_cond_occur.writeTo("bios.condition_occurrence").append()
+if df_cond_occur.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+	count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+	# persistindo os dados de observation_period no banco.
+	df_cond_occur.writeTo("bios.condition_occurrence").append()
 
 # *************************************************************
 #  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -817,17 +799,18 @@ df_cond_occur=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.TPAPRESENT.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
-count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
-# persistindo os dados de observation_period no banco.
-df_cond_occur.writeTo("bios.condition_occurrence").append()
+if df_cond_occur.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+	count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+	# persistindo os dados de observation_period no banco.
+	df_cond_occur.writeTo("bios.condition_occurrence").append()
 
 # *************************************************************
 #  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -848,17 +831,18 @@ df_cond_occur=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.SEMAGESTAC.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
-count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
-# persistindo os dados de observation_period no banco.
-df_cond_occur.writeTo("bios.condition_occurrence").append()
+if df_cond_occur.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+	count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+	# persistindo os dados de observation_period no banco.
+	df_cond_occur.writeTo("bios.condition_occurrence").append()
 
 # *************************************************************
 #  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -879,17 +863,18 @@ df_cond_occur=spark.createDataFrame(df_sinasc_cid10.select( \
 								df_sinasc_cid10.CODANOMAL.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
-count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
-# persistindo os dados de observation_period no banco.
-df_cond_occur.writeTo("bios.condition_occurrence").append()
+if df_cond_occur.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+	count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+	# persistindo os dados de observation_period no banco.
+	df_cond_occur.writeTo("bios.condition_occurrence").append()
 
 # *************************************************************
 #  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -910,17 +895,18 @@ df_cond_occur=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.DTULTMENST.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
-count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
-# persistindo os dados de observation_period no banco.
-df_cond_occur.writeTo("bios.condition_occurrence").append()
+if df_cond_occur.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+	count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+	# persistindo os dados de observation_period no banco.
+	df_cond_occur.writeTo("bios.condition_occurrence").append()
 
 # *************************************************************
 #  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -947,17 +933,18 @@ df_cond_occur=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.GESTACAO.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
-count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
-# persistindo os dados de observation_period no banco.
-df_cond_occur.writeTo("bios.condition_occurrence").append()
+if df_cond_occur.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+	count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+	# persistindo os dados de observation_period no banco.
+	df_cond_occur.writeTo("bios.condition_occurrence").append()
 
 
 # *************************************************************
@@ -982,17 +969,18 @@ df_cond_occur=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.GRAVIDEZ.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
-count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
-# persistindo os dados de observation_period no banco.
-df_cond_occur.writeTo("bios.condition_occurrence").append()
+if df_cond_occur.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+	count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+	# persistindo os dados de observation_period no banco.
+	df_cond_occur.writeTo("bios.condition_occurrence").append()
 
 # *************************************************************
 #  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -1013,17 +1001,18 @@ df_cond_occur=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.CONSPRENAT.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
-count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
-# persistindo os dados de observation_period no banco.
-df_cond_occur.writeTo("bios.condition_occurrence").append()
+if df_cond_occur.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+	count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+	# persistindo os dados de observation_period no banco.
+	df_cond_occur.writeTo("bios.condition_occurrence").append()
 
 # *************************************************************
 #  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -1049,17 +1038,18 @@ df_cond_occur=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.KOTELCHUCK.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
-count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
-# persistindo os dados de observation_period no banco.
-df_cond_occur.writeTo("bios.condition_occurrence").append()
+if df_cond_occur.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+	count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+	# persistindo os dados de observation_period no banco.
+	df_cond_occur.writeTo("bios.condition_occurrence").append()
 
 # *************************************************************
 #  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -1082,17 +1072,18 @@ df_cond_occur=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.TPMETESTIM.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
-count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
-# persistindo os dados de observation_period no banco.
-df_cond_occur.writeTo("bios.condition_occurrence").append()
+if df_cond_occur.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+	count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+	# persistindo os dados de observation_period no banco.
+	df_cond_occur.writeTo("bios.condition_occurrence").append()
 
 # registro da procedure_occurrence
 #CREATE TABLE procedure_occurrence (
@@ -1150,17 +1141,18 @@ df_proc_occur=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.PARTO.alias('procedure_source_value')).rdd, \
 								df_proc_occur_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
-count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
-# persistindo os dados de observation_period no banco.
-df_proc_occur.writeTo("bios.procedure_occurrence").append()
+if df_proc_occur.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
+	count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+	# persistindo os dados de observation_period no banco.
+	df_proc_occur.writeTo("bios.procedure_occurrence").append()
 
 # *************************************************************
 #  PROCEDURE_OCCURRENCE - Persistência dos dados 
@@ -1185,17 +1177,18 @@ df_proc_occur=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.STTRABPART.alias('procedure_source_value')).rdd, \
 								df_proc_occur_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
-count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
-# persistindo os dados de observation_period no banco.
-df_proc_occur.writeTo("bios.procedure_occurrence").append()
+if df_proc_occur.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
+	count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+	# persistindo os dados de observation_period no banco.
+	df_proc_occur.writeTo("bios.procedure_occurrence").append()
 
 # *************************************************************
 #  PROCEDURE_OCCURRENCE - Persistência dos dados 
@@ -1221,17 +1214,18 @@ df_proc_occur=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.CONSULTAS.alias('procedure_source_value')).rdd, \
 								df_proc_occur_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
-count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
-# persistindo os dados de observation_period no banco.
-df_proc_occur.writeTo("bios.procedure_occurrence").append()
+if df_proc_occur.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
+	count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+	# persistindo os dados de observation_period no banco.
+	df_proc_occur.writeTo("bios.procedure_occurrence").append()
 
 # *************************************************************
 #  PROCEDURE_OCCURRENCE - Persistência dos dados 
@@ -1253,17 +1247,18 @@ df_proc_occur=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.MESPRENAT.alias('procedure_source_value')).rdd, \
 								df_proc_occur_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
-count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
-# persistindo os dados de observation_period no banco.
-df_proc_occur.writeTo("bios.procedure_occurrence").append()
+if df_proc_occur.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
+	count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+	# persistindo os dados de observation_period no banco.
+	df_proc_occur.writeTo("bios.procedure_occurrence").append()
 
 # *************************************************************
 #  PROCEDURE_OCCURRENCE - Persistência dos dados 
@@ -1287,18 +1282,18 @@ df_proc_occur=spark.createDataFrame(df_sinasc.select( \
 								lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
 								df_sinasc.STCESPARTO.alias('procedure_source_value')).rdd, \
 								df_proc_occur_schema)
-
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
-count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
-# persistindo os dados de observation_period no banco.
-df_proc_occur.writeTo("bios.procedure_occurrence").append()
+if df_proc_occur.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
+	count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+	# persistindo os dados de observation_period no banco.
+	df_proc_occur.writeTo("bios.procedure_occurrence").append()
 
 
 # resgistro do measurement
@@ -1360,17 +1355,18 @@ df_measurement=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.TPROBSON.alias('measurement_source_value')).rdd, \
 								df_measurement_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
-count_max_measurement = count_max_measurement_df.first().max_measurement
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_measurement = df_measurement.withColumn("measurement_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
-# persistindo os dados de observation_period no banco.
-df_measurement.writeTo("bios.measurement").append()
+if df_measurement.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
+	count_max_measurement = count_max_measurement_df.first().max_measurement
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_measurement = df_measurement.withColumn("measurement_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
+	# persistindo os dados de observation_period no banco.
+	df_measurement.writeTo("bios.measurement").append()
 
 # *************************************************************
 #  MEASUREMENT - Persistência dos dados 
@@ -1391,17 +1387,18 @@ df_measurement=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.APGAR1.alias('measurement_source_value')).rdd, \
 								df_measurement_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
-count_max_measurement = count_max_measurement_df.first().max_measurement
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_measurement = df_measurement.withColumn("measurement_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
-# persistindo os dados de observation_period no banco.
-df_measurement.writeTo("bios.measurement").append()
+if df_measurement.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
+	count_max_measurement = count_max_measurement_df.first().max_measurement
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_measurement = df_measurement.withColumn("measurement_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
+	# persistindo os dados de observation_period no banco.
+	df_measurement.writeTo("bios.measurement").append()
 
 # *************************************************************
 #  MEASUREMENT - Persistência dos dados 
@@ -1422,17 +1419,18 @@ df_measurement=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.APGAR5.alias('measurement_source_value')).rdd, \
 								df_measurement_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
-count_max_measurement = count_max_measurement_df.first().max_measurement
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_measurement = df_measurement.withColumn("measurement_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
-# persistindo os dados de observation_period no banco.
-df_measurement.writeTo("bios.measurement").append()
+if df_measurement.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
+	count_max_measurement = count_max_measurement_df.first().max_measurement
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_measurement = df_measurement.withColumn("measurement_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
+	# persistindo os dados de observation_period no banco.
+	df_measurement.writeTo("bios.measurement").append()
 
 # *************************************************************
 #  MEASUREMENT - Persistência dos dados 
@@ -1452,18 +1450,18 @@ df_measurement=spark.createDataFrame(df_sinasc.select( \
 								lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
 								df_sinasc.PESO.alias('measurement_source_value')).rdd, \
 								df_measurement_schema)
-
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
-count_max_measurement = count_max_measurement_df.first().max_measurement
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_measurement = df_measurement.withColumn("measurement_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
-# persistindo os dados de observation_period no banco.
-df_measurement.writeTo("bios.measurement").append()
+if df_measurement.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
+	count_max_measurement = count_max_measurement_df.first().max_measurement
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_measurement = df_measurement.withColumn("measurement_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
+	# persistindo os dados de observation_period no banco.
+	df_measurement.writeTo("bios.measurement").append()
 
 #registro observation
 #CREATE TABLE observation (
@@ -1523,25 +1521,23 @@ df_observation=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.PARIDADE.alias('observation_source_value')).rdd, \
 								df_observation_schema)
 
-#obtem o max da tabela para usar na inserção de novos registros
-count_max_observation_df = spark.sql("SELECT greatest(max(observation_id),0) + 1 AS max_observation FROM bios.observation")
-count_max_observation = count_max_observation_df.first().max_observation
-#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-df_observation = df_observation.withColumn("observation_id", monotonically_increasing_id())
-#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-df_observation = df_observation.withColumn("observation_id", df_observation["observation_id"] + count_max_observation)
-# persistindo os dados de observation_period no banco.
-df_observation.writeTo("bios.observation").append()
+if df_observation.count() > 0:
+	#obtem o max da tabela para usar na inserção de novos registros
+	count_max_observation_df = spark.sql("SELECT greatest(max(observation_id),0) + 1 AS max_observation FROM bios.observation")
+	count_max_observation = count_max_observation_df.first().max_observation
+	#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+	# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+	# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+	df_observation = df_observation.withColumn("observation_id", monotonically_increasing_id())
+	#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+	df_observation = df_observation.withColumn("observation_id", df_observation["observation_id"] + count_max_observation)
+	# persistindo os dados de observation_period no banco.
+	df_observation.writeTo("bios.observation").append()
 
 #registro datasus_person (extension table to receive extras fields from SINASC/SIM)
 #Create table datasus_person (
 # person_id  bigint not null,
 # system_source_id  integer not null, 
-# city_origin integer,
-# mother_city integer,
-# state_origin  integer,
 # mother_birth_date_source_value integer,
 # mother_birth_date date,
 # mother_years_of_study integer,
@@ -1550,76 +1546,112 @@ df_observation.writeTo("bios.observation").append()
 # mother_marital_status  integer,
 # mother_age   integer,
 # mother_city_of_birth integer,
+# mother_state_of_birth  integer,
 # mother_race integer,
 # mother_elementary_school integer,
 # father_age   integer,
 # responsible_document_type  integer,
 # responsible_role_type integer,
 # place_of_birth_type_source_value integer, 
-# care_site_of_birth_source_value integer) 
+# care_site_of_birth_source_value integer,
+# mother_professional_occupation integer, 
+# mother_country_of_origin integer, 
+# number_of_dead_children integer, 
+# number_of_living_children integer, 
+# number_of_previous_pregnancies integer, 
+# number_of_previous_cesareans integer, 
+# number_of_previous_normal_born integer) 
 # using iceberg;
 
-#insert into person_ext
-#(df_condition_occur.identity, df_sinasc.identity, when df_sinasc.tpdocresp = 1 then 9999999 when df_sinasc.tpdocresp = 2 then when df_sinasc.tpdocresp = 3 then 999999 when df_sinasc.tpdocresp = 4 then 9999999 else 999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.tpdocresp), # TPDOCRESP	Tipo do documento do responsável. Valores: 1‐CNES; 2‐CRM; 3‐ COREN; 4‐RG; 5‐CPF.
-#(df_condition_occur.identity, df_sinasc.identity, when df_sinasc.tpfuncresp = 1 then 4000621 when df_sinasc.tpfuncresp = 2 then 32581 when df_sinasc.tpfuncresp = 3 then 40561317 when df_sinasc.tpnascassi = 4 then 999999 else 9999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.tpfuncresp), # TPFUNCRESP	Tipo de função do responsável pelo preenchimento. Valores: 1– Médico; 2– Enfermeiro; 3– Parteira; 4– Funcionário do cartório; 5– Outros.
-#(df_condition_occur.identity, df_sinasc.identity, when df_sinasc.idanomal = 1 then df_sinasc.anomalia when df_sinasc.idanomal = 2 then 9999999 else 999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.idanomal), # IDANOMAL	Anomalia identificada: 1– Sim; 2– Não; 9– Ignorado
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, 35810075, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.idademae	 , df_sinasc.idademae	 )""") # IDADEMAE	Idade da mãe
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, 35810331, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.idadepai	 , df_sinasc.idadepai	 )""") # IDADEPAI	Idade do pai
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.qtdfilmort, df_sinasc.qtdfilmort   )""") # QTDFILMORT	Número de filhos mortos
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.qtdfilvivo, df_sinasc.qtdfilvivo   )""") # QTDFILVIVO	Número de filhos vivos
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.qtdgestant, df_sinasc.qtdgestant   )""") # QTDGESTANT	Número de gestações anteriores
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.qtdpartces, df_sinasc.qtdpartces   )""") # QTDPARTCES	Número de partos cesáreos
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.qtdpartnor, df_sinasc.qtdpartnor   )""") # QTDPARTNOR	Número de partos vaginais
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.dtnascmae	, df_sinasc.dtnascmae	 )""") # DTNASCMAE	Data de nascimento da mãe: dd mm aaaa
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.racacormae, df_sinasc.racacormae   )""") # RACACORMAE	1 Tipo de raça e cor da mãe: 1– Branca; 2– Preta; 3– Amarela; 4– Parda; 5– Indígena.
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.codmunnasc, df_sinasc.codmunnasc   )""") # CODMUNNASC	Código do município de nascimento
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.codmunnatu, df_sinasc.codmunnatu   )""") # CODMUNNATU	Código do município de naturalidade da mãe
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.codocupmae, df_sinasc.codocupmae   )""") # CODOCUPMAE	Código de ocupação da mãe conforme tabela do CBO (Código Brasileiro de Ocupações).
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.codufnatu	, df_sinasc.codufnatu	 )""") # CODUFNATU	Código da UF de naturalidade da mãe
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.dtregcart	, df_sinasc.dtregcart	 )""") # DTREGCART	Data do registro no cartório
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.escmae	 	 , df_sinasc.escmae	 	  )""") # ESCMAE		Escolaridade, em anos de estudo concluídos: 1 – Nenhuma; 2 – 1 a 3 anos; 3 – 4 a 7 anos; 4 – 8 a 11 anos; 5 – 12 e mais; 9 – Ignorado.
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.escmae2010, df_sinasc.escmae2010   )""") # ESCMAE2010	Escolaridade 2010. Valores: 0 – Sem escolaridade; 1 – Fundamental I (1ª a 4ª série); 2 – Fundamental II (5ª a 8ª série); 3 – Médio (antigo 2º Grau); 4 – Superior incompleto; 5 – Superior completo; 9 – Ignorado.
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.escmaeagr1, df_sinasc.escmaeagr1   )""") # ESCMAEAGR1	Escolaridade 2010 agregada. Valores: 00 – Sem Escolaridade; 01 – Fundamental I Incompleto; 02 – Fundamental I Completo; 03 – Fundamental II Incompleto; 04 – Fundamental II Completo; 05 – Ensino Médio Incompleto; 06 – Ensino Médio Completo; 07 – Superior Incompleto; 08 – Superior Completo; 09 – Ignorado; 10 – Fundamental I Incompleto ou Inespecífico; 11 – Fundamental II Incompleto ou Inespecífico; 12 – Ensino Médio Incompleto ou Inespecífico.
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.estcivmae	, df_sinasc.estcivmae	 )""") # ESTCIVMAE	Situação conjugal da mãe: 1– Solteira; 2– Casada; 3– Viúva; 4– Separada judicialmente/divorciada; 5– União estável; 9– Ignorada.
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.naturalmae, df_sinasc.naturalmae   )""") # NATURALMAE	Se a mãe for estrangeira, constará o código do país de nascimento.
-#spark.sql("""insert into observation (observation_id,person_id ,observation_concept_id ,observation_date ,observation_type_concept_id ,value_as_number,value_source_value)
-#values (
-#(df_observation.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.seriescmae, df_sinasc.seriescmae   )""") # SERIESCMAE	Série escolar da mãe. Valores de 1 a 8.
+
+# CODMUNNATU
+# CODOCUPMAE
+# CODUFNATU
+# DTNASCMAE
+# ESCMAE
+# ESCMAE2010
+# ESCMAEAGR1
+# ESTCIVMAE
+# IDADEMAE
+# IDADEPAI
+# NATURALMAE
+# QTDFILMORT
+# QTDFILVIVO
+# QTDGESTANT
+# QTDPARTCES
+# QTDPARTNOR
+# RACACORMAE
+# SERIESCMAE
+# TPDOCRESP
+# TPFUNCRESP
+
+# *************************************************************
+#  DATASUS_PERSON - Persistência dos dados 
+#  Para cada registro do source será criado um único correspondente na tabela DATASUS_PERSON
+# *************************************************************
+# Definindo o novo esquema para suportar valores nulos e não-nulos.
+
+df_datasus_person_schema = StructType([ \
+StructField("person_id", LongType(), False), \
+StructField("system_source_id", IntegerType(), False), \ 
+StructField("mother_birth_date_source_value", IntegerType(), True), \
+StructField("mother_birth_date", DateType(), True), \
+StructField("mother_years_of_study", IntegerType(), True), \
+StructField("mother_education_level", IntegerType(), True), \
+StructField("mother_education_level_aggregated", IntegerType(), True), \
+StructField("mother_marital_status", IntegerType(), True), \ 
+StructField("mother_age", IntegerType(), True), \  
+StructField("mother_city_of_birth", IntegerType(), True), \
+StructField("mother_state_of_birth", IntegerType(), True), \ 
+StructField("mother_race", IntegerType(), True), \
+StructField("mother_elementary_school", IntegerType(), True), \
+StructField("father_age", IntegerType(), True), \  
+StructField("responsible_document_type", IntegerType(), True), \ 
+StructField("responsible_role_type", IntegerType(), True), \
+StructField("place_of_birth_type_source_value", IntegerType(), True), \ 
+StructField("care_site_of_birth_source_value", IntegerType(), True)\
+])
+
+
+# *************************************************************
+#  DATASUS_PERSON - Persistência dos dados 
+#  Para cada registro do source será criado um único correspondente na tabela DATASUS_PERSON
+#  Source field: TPROBSON
+# *************************************************************
+# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+# e aplicando o novo esquema ao DataFrame e copiando os dados.
+df_datasus_person=spark.createDataFrame(df_sinasc.select( \
+								df_sinasc.person_id.alias('person_id'), \
+                                lit(1).cast(IntegerType()).alias('system_source_id'), \
+                                df_sinasc.DTNASCMAE.alias('mother_birth_date_source_value'), \
+                                to_date(lpad(df_sinasc.DTNASCMAE,8,'0'), 'ddMMyyyy').alias('mother_birth_date'), \
+                                df_sinasc.ESCMAE.alias('mother_years_of_study'), \
+                                df_sinasc.ESCMAE2010.alias('mother_education_level'), \
+                                df_sinasc.ESCMAEAGR1.alias('mother_education_level_aggregated'), \
+                                df_sinasc.ESTCIVMAE.alias('mother_marital_status'), \
+                                df_sinasc.IDADEMAE.alias('mother_age'), \
+                                df_sinasc.CODMUNNATU.alias('mother_city_of_birth'), \
+                                df_sinasc.CODUFNATU.alias('mother_state_of_birth'), \
+                                df_sinasc.RACACORMAE.alias('mother_race'), \
+                                df_sinasc.SERIESCMAE.alias('mother_elementary_school'), \
+                                df_sinasc.IDADEPAI.alias('father_age'), \
+                                df_sinasc.TPDOCRESP.alias('responsible_document_type'), \
+                                df_sinasc.TPFUNCRESP.alias('responsible_role_type'), \
+                                df_sinasc.LOCNASC.alias('place_of_birth_type_source_value'), \
+                                df_sinasc.CODESTAB.alias('care_site_of_birth_source_value'), \
+                                df_sinasc.CODOCUPMAE.alias('mother_professional_occupation'), \
+                                df_sinasc.NATURALMAE.alias('mother_country_of_origin'), \
+                                df_sinasc.QTDFILMORT.alias('number_of_dead_children'), \
+                                df_sinasc.QTDFILVIVO.alias('number_of_living_children'), \
+                                df_sinasc.QTDGESTANT.alias('number_of_previous_pregnancies'), \
+                                df_sinasc.QTDPARTCES.alias('number_of_previous_cesareans'), \
+                                df_sinasc.QTDPARTNOR.alias('number_of_previous_normal_born')).rdd, \
+                                df_datasus_person_schema)
+
+# persistindo os dados de observation_period no banco.
+if df_datasus_person.count() > 0:
+    df_datasus_person.writeTo("bios.datasus_person").append()
+
+
+
+ 
