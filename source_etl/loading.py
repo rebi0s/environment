@@ -12,59 +12,16 @@ from pyspark.sql.functions import row_number
 from pyspark.sql.functions import *
 from utils import *
 
+logger = configLogger('main');
+# o nível de log efetivamente registrado depende da variável de ambiente utilizada abaixo.
+logHandler = addLogHandler(logger, os.getenv("CTRNA_LOG_LEVEL", "INFO"))
+
+logger.info('Log configuration done')
+
 spark = initSpark()
 
-data_atual = datetime.now().strftime('%Y%m%d')
-log_path = os.getenv("CTRNA_LOG_PATH", "/home/src/etl/")
-file_name = f'{log_path}ingestion_{data_atual}.log'
-log_handler = utlLogInit('main','INFO',file_name)
-
 # Mensagens de log
-logger.info('mensagem de informação')
-
-
-
-#ordem de inserção segundo a dependência entre as tabelas
-#OMOP Version 5.4
-#CONCEPT
-#CONCEPT_CLASSs
-#VOCABULARY
-#DOMAIN
-#LOCATION
-#CARE_SITE
-#PROVIDER
-#PERSON
-#VISIT_OCCURRENCE
-#VISIT_DETAIL
-#RELATIONSHIP
-#EPISODE
-#NOTE
-#CDM_SOURCE
-#COHORT_DEFINITION
-#CONCEPT_ANCESTOR
-#CONCEPT_SYNONYM
-#CONDITION_ERA
-#DRUG_ERA
-#EPISODE_EVENT
-#OBSERVATION_PERIOD
-#CONCEPT_RELATIONSHIP
-#DOSE_ERA
-#FACT_RELATIONSHIP
-#METADATA
-#DEATH
-#NOTE_NLP
-#SOURCE_TO_CONCEPT_MAP
-#COST
-#DRUG_STRENGTH
-#SPECIMEN
-#CONDITION_OCCURRENCE
-#DRUG_EXPOSURE
-#PROCEDURE_OCCURRENCE
-#DEVICE_EXPOSURE
-#PAYER_PLAN_PERIOD
-#OBSERVATION
-#MEASUREMENT
-#COHORT
+logger.info('Spark session started.')
 
 #load dos municípios fazendo download de uma base pública
 municipios = [

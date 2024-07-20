@@ -2,13 +2,9 @@
 import os
 import sys
 import logging
+from datetime import datetime
 from pyspark import SparkConf
 from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DateType, TimestampType, LongType
-from pyspark.sql.functions import monotonically_increasing_id
-from pyspark.sql.window import Window
-from pyspark.sql.functions import row_number
-from pyspark.sql.functions import *
 from utils import *
 
 def initSpark():
@@ -30,28 +26,36 @@ def initSpark():
         .set("spark.sql.catalogImplementation", "in-memory")
         .set("spark.sql.defaultCatalog", os.getenv("CTRNA_CATALOG_DEFAULT","bios")) # Name of the Iceberg catalog
     )
-
     spark = SparkSession.builder.config(conf=conf).getOrCreate()
     return spark
 
-def utlLogInit(log_file_name: str):
-    handler = logging.FileHandler(log_file_name)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-
-def initLogger(log_name: str, log_level: str, log_handler: logging.FileHandler):
+def configLogger(log_name: str):
+    # nome do log é a string que identifica a origem da entrada no log, visto que um mesmo arquivo receberá log de diferentes rotinas/etapas da ingestão
     logger = logging.getLogger(log_name)
-    if log_level == 'INFO':
-        logger.setLevel(logging.INFO)
-    if log_level =='WARN':
-        logger.setLevel(logging.WARN)
-    if log_level =='DEBUG':
-        logger.setLevel(logging.DEBUG)
-    if log_level =='ERROR':
-        logger.setLevel(logging.ERROR)
-    if log_level =='CRITICAL':
-        logger.setLevel(logging.CRITICAL)
-    logger.addHandler(log_handler)
+    # o logger, como sendo o objeto principal do log, tem o nível de detalhe definido como DEBUG, e no handler de cada logger é definido o nível desejado.
+    logger.setLevel(logging.DEBUG)
     return logger
 
-
+def addLogHandler(idLogger: logging.Logger, log_level: str):
+    # Obtém a data atual no formato desejado
+    data_atual = datetime.now().strftime('%Y%m%d')
+    log_path = os.getenv("CTRNA_LOG_PATH", "/home/src/etl/")
+    # Usa a data atual para formatar o nome do arquivo de log
+    file_name = f'{log_path}ingestion_{data_atual}.log'
+    # todo o processo de ingestão utilizará um mesmo arquivo de log, mas caso seja desejado logs individuais, deve-se fornecer o nome do arquivo diferente.
+    handler = logging.FileHandler(file_name)
+    formatter = logging.Formatter('%(asctime)s %(name)s [%(levelname)s] %(message)s')
+    handler.setFormatter(formatter)
+    if log_level =='DEBUG':
+        handler.setLevel(logging.DEBUG)
+    if log_level == 'INFO':
+        handler.setLevel(logging.INFO)
+    if log_level =='WARN':
+        handler.setLevel(logging.WARN)
+    if log_level =='ERROR':
+        handler.setLevel(logging.ERROR)
+    if log_level =='CRITICAL':
+        handler.setLevel(logging.CRITICAL)
+    # o handler é atribuído ao logger para envio das mensagens
+    idLogger.addHandler(handler)
+    return handler
