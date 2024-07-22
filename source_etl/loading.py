@@ -9,7 +9,7 @@ from pyspark.sql.types import StructType, StructField, IntegerType, StringType, 
 from pyspark.sql.functions import monotonically_increasing_id
 from pyspark.sql.window import Window
 from pyspark.sql.functions import row_number
-from pyspark.sql.functions import *
+from pyspark.sql import functions as FSql
 from utils import *
 
 logger = configLogger('main');
@@ -521,23 +521,23 @@ df_person_schema = StructType([ \
 
 df_person = spark.createDataFrame(df_sinasc.select( \
 df_sinasc.person_id, \
-when(df_sinasc['SEXO'] == 'M', 8507).when(df_sinasc['SEXO'] == 'F', 8532).when(df_sinasc['SEXO'] == '1', 8507).when(df_sinasc['SEXO'] == '2', 8532).otherwise(8551).alias('gender_concept_id'), \
-year(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("year_of_birth"), \
-month(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("month_of_birth"), \
-dayofmonth(make_date(substring(lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("day_of_birth"), \
-to_timestamp(concat(lpad(df_sinasc.DTNASC,8,'0'), lit(' '), lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('birth_timestamp'), \
-when(df_sinasc['RACACOR'] == 1, 3212942).when(df_sinasc['RACACOR'] == 2, 3213733).when(df_sinasc['RACACOR'] == 3, 3213498).when(df_sinasc['RACACOR'] == 4, 3213487).otherwise(3213694).alias('race_concept_id'),  \
-lit(38003563).alias('ethnicity_concept_id'), \
+FSql.when(df_sinasc['SEXO'] == 'M', 8507).FSql.when(df_sinasc['SEXO'] == 'F', 8532).FSql.when(df_sinasc['SEXO'] == '1', 8507).FSql.when(df_sinasc['SEXO'] == '2', 8532).otherwise(8551).alias('gender_concept_id'), \
+year(make_date(substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("year_of_birth"), \
+month(make_date(substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("month_of_birth"), \
+dayofmonth(make_date(substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("day_of_birth"), \
+to_timestamp(concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('birth_timestamp'), \
+FSql.when(df_sinasc['RACACOR'] == 1, 3212942).FSql.when(df_sinasc['RACACOR'] == 2, 3213733).FSql.when(df_sinasc['RACACOR'] == 3, 3213498).FSql.when(df_sinasc['RACACOR'] == 4, 3213487).otherwise(3213694).alias('race_concept_id'),  \
+FSql.lit(38003563).alias('ethnicity_concept_id'), \
 df_sinasc.CODMUNRES.alias('location_id'), \
-lit(None).cast(StringType()).alias('provider_id'), \
+FSql.lit(None).cast(StringType()).alias('provider_id'), \
 df_sinasc.CODESTAB.alias('care_site_id'), \
-lit(None).cast(StringType()).alias('person_source_value'), \
+FSql.lit(None).cast(StringType()).alias('person_source_value'), \
 df_sinasc.SEXO.alias('gender_source_value'),
-lit(None).cast(StringType()).alias('gender_source_concept_id'), \
+FSql.lit(None).cast(StringType()).alias('gender_source_concept_id'), \
 df_sinasc.RACACOR.alias('race_source_value'),  
-lit(None).cast(StringType()).alias('race_source_concept_id'), \
-lit(None).cast(StringType()).alias('ethnicity_source_value'), \
-lit(None).cast(StringType()).alias('ethnicity_source_concept_id') \
+FSql.lit(None).cast(StringType()).alias('race_source_concept_id'), \
+FSql.lit(None).cast(StringType()).alias('ethnicity_source_value'), \
+FSql.lit(None).cast(StringType()).alias('ethnicity_source_concept_id') \
 ).rdd, \
 df_person_schema)
 
@@ -568,11 +568,11 @@ df_obs_period_schema = StructType([ \
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_obs_period=spark.createDataFrame(df_sinasc.select(\
-                      lit(0).cast(LongType()).alias('observation_period_id'), \
+                      FSql.lit(0).cast(LongType()).alias('observation_period_id'), \
                       df_sinasc.person_id.alias('person_id'), \
-                      to_timestamp(concat(lpad(df_sinasc.DTNASC,8,'0'), lit(' '), lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias("observation_period_start_date"), \
-                      to_timestamp(concat(lpad(df_sinasc.DTNASC,8,'0'), lit(' '), lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('observation_period_end_date'), \
-                      lit(4193440).alias('period_type_concept_id')).rdd, \
+                      to_timestamp(concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias("observation_period_start_date"), \
+                      to_timestamp(concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('observation_period_end_date'), \
+                      FSql.lit(4193440).alias('period_type_concept_id')).rdd, \
                       df_obs_period_schema)
 if df_obs_period.count() > 0:
 	#obtem o max da tabela para usar na inserção de novos registros
@@ -714,12 +714,12 @@ StructField("condition_source_value", StringType(), True) \
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								when(df_sinasc['STDNEPIDEM'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+								FSql.when(df_sinasc['STDNEPIDEM'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+								FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 								df_sinasc.STDNEPIDEM.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
@@ -747,12 +747,12 @@ if df_cond_occur.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								when(df_sinasc['TPAPRESENT'] == '1', 999999).when(df_sinasc['TPAPRESENT'] == '2', 999999).when(df_sinasc['TPAPRESENT'] == '3', 4218938).otherwise(999998).alias('condition_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+								FSql.when(df_sinasc['TPAPRESENT'] == '1', 999999).FSql.when(df_sinasc['TPAPRESENT'] == '2', 999999).FSql.when(df_sinasc['TPAPRESENT'] == '3', 4218938).otherwise(999998).alias('condition_concept_id'), \
+								FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 								df_sinasc.TPAPRESENT.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
@@ -779,12 +779,12 @@ if df_cond_occur.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-                                lit(1576063).cast(LongType()).alias('condition_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+                                FSql.lit(1576063).cast(LongType()).alias('condition_concept_id'), \
+								FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 								df_sinasc.SEMAGESTAC.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
@@ -811,12 +811,12 @@ if df_cond_occur.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_cond_occur=spark.createDataFrame(df_sinasc_cid10.select( \
-								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 								df_sinasc_cid10.person_id.alias('person_id'), \
                                 df_sinasc_cid10.concept_id.alias('condition_concept_id'), \
-								to_date(lpad(df_sinasc_cid10.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-								to_date(lpad(df_sinasc_cid10.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+								FSql.FSql.to_date(FSql.lpad(df_sinasc_cid10.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								FSql.FSql.to_date(FSql.lpad(df_sinasc_cid10.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 								df_sinasc_cid10.CODANOMAL.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
@@ -843,12 +843,12 @@ if df_cond_occur.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-                                lit(4072438).cast(LongType()).alias('condition_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+                                FSql.lit(4072438).cast(LongType()).alias('condition_concept_id'), \
+								FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 								df_sinasc.DTULTMENST.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
@@ -875,18 +875,18 @@ if df_cond_occur.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								when(df_sinasc['GESTACAO'] == '1', 999999).\
-                                    when(df_sinasc['GESTACAO'] == '2', 999999).\
-                                    when(df_sinasc['GESTACAO'] == '3', 999999).\
-                                    when(df_sinasc['GESTACAO'] == '4', 999999).\
-                                    when(df_sinasc['GESTACAO'] == '5', 999999).\
-                                    when(df_sinasc['GESTACAO'] == '6', 999999).\
+								FSql.when(df_sinasc['GESTACAO'] == '1', 999999).\
+                                    FSql.when(df_sinasc['GESTACAO'] == '2', 999999).\
+                                    FSql.when(df_sinasc['GESTACAO'] == '3', 999999).\
+                                    FSql.when(df_sinasc['GESTACAO'] == '4', 999999).\
+                                    FSql.when(df_sinasc['GESTACAO'] == '5', 999999).\
+                                    FSql.when(df_sinasc['GESTACAO'] == '6', 999999).\
                                     otherwise(999999).alias('condition_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+								FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 								df_sinasc.GESTACAO.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
@@ -914,15 +914,15 @@ if df_cond_occur.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								when(df_sinasc['GRAVIDEZ'] == '1', 999999).\
-                                    when(df_sinasc['GRAVIDEZ'] == '2', 999999).\
-                                    when(df_sinasc['GRAVIDEZ'] == '3', 999999).\
+								FSql.when(df_sinasc['GRAVIDEZ'] == '1', 999999).\
+                                    FSql.when(df_sinasc['GRAVIDEZ'] == '2', 999999).\
+                                    FSql.when(df_sinasc['GRAVIDEZ'] == '3', 999999).\
                                     otherwise(999999).alias('condition_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 								df_sinasc.GRAVIDEZ.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
@@ -949,12 +949,12 @@ if df_cond_occur.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								lit(4313474).cast(LongType()).alias('condition_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+								FSql.lit(4313474).cast(LongType()).alias('condition_concept_id'), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 								df_sinasc.CONSPRENAT.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
@@ -981,17 +981,17 @@ if df_cond_occur.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								when(df_sinasc['KOTELCHUCK'] == '1', 999999).\
-                                    when(df_sinasc['KOTELCHUCK'] == '2', 999999).\
-                                    when(df_sinasc['KOTELCHUCK'] == '3', 999999).\
-                                    when(df_sinasc['KOTELCHUCK'] == '4', 999999).\
-                                    when(df_sinasc['KOTELCHUCK'] == '5', 999999).\
+								FSql.when(df_sinasc['KOTELCHUCK'] == '1', 999999).\
+                                    FSql.when(df_sinasc['KOTELCHUCK'] == '2', 999999).\
+                                    FSql.when(df_sinasc['KOTELCHUCK'] == '3', 999999).\
+                                    FSql.when(df_sinasc['KOTELCHUCK'] == '4', 999999).\
+                                    FSql.when(df_sinasc['KOTELCHUCK'] == '5', 999999).\
                                     otherwise(999999).alias('condition_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 								df_sinasc.KOTELCHUCK.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
@@ -1018,14 +1018,14 @@ if df_cond_occur.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+								FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								when(df_sinasc['TPMETESTIM'] == '1', 999999).\
-                                    when(df_sinasc['TPMETESTIM'] == '2', 999999).\
+								FSql.when(df_sinasc['TPMETESTIM'] == '1', 999999).\
+                                    FSql.when(df_sinasc['TPMETESTIM'] == '2', 999999).\
                                     otherwise(999999).alias('condition_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-								lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
+								FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 								df_sinasc.TPMETESTIM.alias('condition_source_value')).rdd, \
 								df_cond_occur_schema)
 
@@ -1087,14 +1087,14 @@ StructField("procedure_source_value", StringType(), True) \
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_proc_occur=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+								FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								when(df_sinasc['PARTO'] == '1', 999999).\
-								when(df_sinasc['PARTO'] == '2', 999999).\
+								FSql.when(df_sinasc['PARTO'] == '1', 999999).\
+								FSql.when(df_sinasc['PARTO'] == '2', 999999).\
                                 otherwise(999998).alias('procedure_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
-								lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
+								FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
 								df_sinasc.PARTO.alias('procedure_source_value')).rdd, \
 								df_proc_occur_schema)
 
@@ -1122,15 +1122,15 @@ if df_proc_occur.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_proc_occur=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+								FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								when(df_sinasc['STTRABPART'] == '1', 4121586).\
-								when(df_sinasc['STTRABPART'] == '2', 999999).\
-								when(df_sinasc['STTRABPART'] == '3', 999999).\
+								FSql.when(df_sinasc['STTRABPART'] == '1', 4121586).\
+								FSql.when(df_sinasc['STTRABPART'] == '2', 999999).\
+								FSql.when(df_sinasc['STTRABPART'] == '3', 999999).\
                                 otherwise(999998).alias('procedure_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
-								lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
+								FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
 								df_sinasc.STTRABPART.alias('procedure_source_value')).rdd, \
 								df_proc_occur_schema)
 
@@ -1158,16 +1158,16 @@ if df_proc_occur.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_proc_occur=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+								FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								when(df_sinasc['CONSULTAS'] == '1', 999999).\
-								when(df_sinasc['CONSULTAS'] == '2', 999999).\
-								when(df_sinasc['CONSULTAS'] == '3', 999999).\
-								when(df_sinasc['CONSULTAS'] == '4', 999999).\
+								FSql.when(df_sinasc['CONSULTAS'] == '1', 999999).\
+								FSql.when(df_sinasc['CONSULTAS'] == '2', 999999).\
+								FSql.when(df_sinasc['CONSULTAS'] == '3', 999999).\
+								FSql.when(df_sinasc['CONSULTAS'] == '4', 999999).\
                                 otherwise(999998).alias('procedure_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
-								lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
+								FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
 								df_sinasc.CONSULTAS.alias('procedure_source_value')).rdd, \
 								df_proc_occur_schema)
 
@@ -1195,12 +1195,12 @@ if df_proc_occur.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_proc_occur=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+								FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								lit(999999).cast(LongType()).alias('procedure_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
-								lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+								FSql.lit(999999).cast(LongType()).alias('procedure_concept_id'), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
+								FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
 								df_sinasc.MESPRENAT.alias('procedure_source_value')).rdd, \
 								df_proc_occur_schema)
 
@@ -1228,15 +1228,15 @@ if df_proc_occur.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_proc_occur=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+								FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								when(df_sinasc['STCESPARTO'] == '1', 999999).\
-								when(df_sinasc['STCESPARTO'] == '2', 999999).\
-								when(df_sinasc['STCESPARTO'] == '3', 999999).\
+								FSql.when(df_sinasc['STCESPARTO'] == '1', 999999).\
+								FSql.when(df_sinasc['STCESPARTO'] == '2', 999999).\
+								FSql.when(df_sinasc['STCESPARTO'] == '3', 999999).\
                                 otherwise(999998).alias('procedure_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
-								lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
+								FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
 								df_sinasc.STCESPARTO.alias('procedure_source_value')).rdd, \
 								df_proc_occur_schema)
 if df_proc_occur.count() > 0:
@@ -1304,11 +1304,11 @@ StructField("measurement_source_value", StringType(), True) \
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_measurement=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('measurement_id'), \
+								FSql.lit(0).cast(LongType()).alias('measurement_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								lit(9999999).cast(LongType()).alias('measurement_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
-								lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
+								FSql.lit(9999999).cast(LongType()).alias('measurement_concept_id'), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
+								FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
 								df_sinasc.TPROBSON.alias('measurement_source_value')).rdd, \
 								df_measurement_schema)
 
@@ -1336,11 +1336,11 @@ if df_measurement.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_measurement=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('measurement_id'), \
+								FSql.lit(0).cast(LongType()).alias('measurement_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								lit(4014304).cast(LongType()).alias('measurement_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
-								lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
+								FSql.lit(4014304).cast(LongType()).alias('measurement_concept_id'), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
+								FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
 								df_sinasc.APGAR1.alias('measurement_source_value')).rdd, \
 								df_measurement_schema)
 
@@ -1368,11 +1368,11 @@ if df_measurement.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_measurement=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('measurement_id'), \
+								FSql.lit(0).cast(LongType()).alias('measurement_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								lit(4016464).cast(LongType()).alias('measurement_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
-								lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
+								FSql.lit(4016464).cast(LongType()).alias('measurement_concept_id'), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
+								FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
 								df_sinasc.APGAR5.alias('measurement_source_value')).rdd, \
 								df_measurement_schema)
 
@@ -1400,11 +1400,11 @@ if df_measurement.count() > 0:
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_measurement=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('measurement_id'), \
+								FSql.lit(0).cast(LongType()).alias('measurement_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								lit(4264825).cast(LongType()).alias('measurement_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
-								lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
+								FSql.lit(4264825).cast(LongType()).alias('measurement_concept_id'), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
+								FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
 								df_sinasc.PESO.alias('measurement_source_value')).rdd, \
 								df_measurement_schema)
 if df_measurement.count() > 0:
@@ -1470,11 +1470,11 @@ StructField("observation_source_value", StringType(), True) \
 # Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_observation=spark.createDataFrame(df_sinasc.select( \
-								lit(0).cast(LongType()).alias('observation_id'), \
+								FSql.lit(0).cast(LongType()).alias('observation_id'), \
 								df_sinasc.person_id.alias('person_id'), \
-								lit(9999999).cast(LongType()).alias('observation_concept_id'), \
-								to_date(lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("observation_date"), \
-								lit(32848).cast(LongType()).alias('observation_type_concept_id'), \
+								FSql.lit(9999999).cast(LongType()).alias('observation_concept_id'), \
+								FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("observation_date"), \
+								FSql.lit(32848).cast(LongType()).alias('observation_type_concept_id'), \
 								df_sinasc.PARIDADE.alias('observation_source_value')).rdd, \
 								df_observation_schema)
 
@@ -1550,22 +1550,22 @@ if df_observation.count() > 0:
 
 df_datasus_person_schema = StructType([ \
 StructField("person_id", LongType(), False), \
-StructField("system_source_id", IntegerType(), False), \ 
+StructField("system_source_id", IntegerType(), False), \
 StructField("mother_birth_date_source_value", IntegerType(), True), \
 StructField("mother_birth_date", DateType(), True), \
 StructField("mother_years_of_study", IntegerType(), True), \
 StructField("mother_education_level", IntegerType(), True), \
 StructField("mother_education_level_aggregated", IntegerType(), True), \
-StructField("mother_marital_status", IntegerType(), True), \ 
-StructField("mother_age", IntegerType(), True), \  
+StructField("mother_marital_status", IntegerType(), True), \
+StructField("mother_age", IntegerType(), True), \
 StructField("mother_city_of_birth", IntegerType(), True), \
-StructField("mother_state_of_birth", IntegerType(), True), \ 
+StructField("mother_state_of_birth", IntegerType(), True), \
 StructField("mother_race", IntegerType(), True), \
 StructField("mother_elementary_school", IntegerType(), True), \
-StructField("father_age", IntegerType(), True), \  
-StructField("responsible_document_type", IntegerType(), True), \ 
+StructField("father_age", IntegerType(), True), \
+StructField("responsible_document_type", IntegerType(), True), \
 StructField("responsible_role_type", IntegerType(), True), \
-StructField("place_of_birth_type_source_value", IntegerType(), True), \ 
+StructField("place_of_birth_type_source_value", IntegerType(), True), \
 StructField("care_site_of_birth_source_value", IntegerType(), True)\
 ])
 
@@ -1579,9 +1579,9 @@ StructField("care_site_of_birth_source_value", IntegerType(), True)\
 # e aplicando o novo esquema ao DataFrame e copiando os dados.
 df_datasus_person=spark.createDataFrame(df_sinasc.select( \
 								df_sinasc.person_id.alias('person_id'), \
-                                lit(1).cast(IntegerType()).alias('system_source_id'), \
+                                FSql.lit(1).cast(IntegerType()).alias('system_source_id'), \
                                 df_sinasc.DTNASCMAE.alias('mother_birth_date_source_value'), \
-                                to_date(lpad(df_sinasc.DTNASCMAE,8,'0'), 'ddMMyyyy').alias('mother_birth_date'), \
+                                FSql.to_date(FSql.lpad(df_sinasc.DTNASCMAE,8,'0'), 'ddMMyyyy').alias('mother_birth_date'), \
                                 df_sinasc.ESCMAE.alias('mother_years_of_study'), \
                                 df_sinasc.ESCMAE2010.alias('mother_education_level'), \
                                 df_sinasc.ESCMAEAGR1.alias('mother_education_level_aggregated'), \
