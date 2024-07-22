@@ -522,10 +522,10 @@ df_person_schema = StructType([ \
 df_person = spark.createDataFrame(df_sinasc.select( \
 df_sinasc.person_id, \
 FSql.when(df_sinasc['SEXO'] == 'M', 8507).FSql.when(df_sinasc['SEXO'] == 'F', 8532).FSql.when(df_sinasc['SEXO'] == '1', 8507).FSql.when(df_sinasc['SEXO'] == '2', 8532).otherwise(8551).alias('gender_concept_id'), \
-year(make_date(substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("year_of_birth"), \
-month(make_date(substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("month_of_birth"), \
-dayofmonth(make_date(substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 5, 4), substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 3, 2), substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("day_of_birth"), \
-to_timestamp(concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('birth_timestamp'), \
+FSql.year(FSql.make_date(FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 5, 4), FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 3, 2), FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("year_of_birth"), \
+FSql.month(FSql.make_date(FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 5, 4), FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 3, 2), FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("month_of_birth"), \
+FSql.dayofmonth(FSql.make_date(FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 5, 4), FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 3, 2), FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("day_of_birth"), \
+FSql.to_timestamp(FSql.concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('birth_timestamp'), \
 FSql.when(df_sinasc['RACACOR'] == 1, 3212942).FSql.when(df_sinasc['RACACOR'] == 2, 3213733).FSql.when(df_sinasc['RACACOR'] == 3, 3213498).FSql.when(df_sinasc['RACACOR'] == 4, 3213487).otherwise(3213694).alias('race_concept_id'),  \
 FSql.lit(38003563).alias('ethnicity_concept_id'), \
 df_sinasc.CODMUNRES.alias('location_id'), \
@@ -570,8 +570,8 @@ df_obs_period_schema = StructType([ \
 df_obs_period=spark.createDataFrame(df_sinasc.select(\
                       FSql.lit(0).cast(LongType()).alias('observation_period_id'), \
                       df_sinasc.person_id.alias('person_id'), \
-                      to_timestamp(concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias("observation_period_start_date"), \
-                      to_timestamp(concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('observation_period_end_date'), \
+                      FSql.to_timestamp(concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias("observation_period_start_date"), \
+                      FSql.to_timestamp(concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('observation_period_end_date'), \
                       FSql.lit(4193440).alias('period_type_concept_id')).rdd, \
                       df_obs_period_schema)
 if df_obs_period.count() > 0:
