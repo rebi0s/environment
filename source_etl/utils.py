@@ -7,7 +7,7 @@ from pyspark import SparkConf
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as FSql
 from utils import *
-from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DateType, TimestampType, LongType
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DateType, TimestampType, LongType, DoubleType
 
 def initSpark():
 
@@ -62,11 +62,27 @@ def addLogHandler(idLogger: logging.Logger, log_level: str):
     idLogger.addHandler(handler)
     return handler
 
-def loadOMOPVocabulary(table_name: str, file_path: str, file_name: str, spark_session: SparkSession, logger: logging.Logger):
+def loadOMOPConcept(file_path: str, file_name: str, spark_session: SparkSession, logger: logging.Logger):
 #CONCEPT.csv           CONCEPT_CLASS.csv         CONCEPT_SYNONYM.csv  DRUG_STRENGTH.csv  VOCABULARY.csv  
 #CONCEPT_ANCESTOR.csv  CONCEPT_RELATIONSHIP.csv  DOMAIN.csv           RELATIONSHIP.csv
-    if table_name == 'CONCEPT':
-        df_load_schema = StructType([ \
+    logger.info("Loading on table CONCEPT started.")
+    df_load_schema = StructType([ \
+    StructField("concept_id", LongType(), False), \
+    StructField("concept_name", StringType(), False), \
+    StructField("domain_id", StringType(), False), \
+    StructField("vocabulary_id", StringType(), False), \
+    StructField("concept_class_id", StringType(), False), \
+    StructField("standard_concept", StringType(), True), \
+    StructField("concept_code", StringType(), False), \
+    StructField("valid_start_date", IntegerType(), False), \
+    StructField("valid_end_date", IntegerType(), False), \
+    StructField("invalid_reason", StringType(), True) \
+    ])
+
+    df_load = spark_session.read.csv(os.path.join(file_path, file_name), sep="\t", header=True, schema=df_load_schema)
+
+    if df_load.count() > 0:
+        df_concept_schema = StructType([ \
         StructField("concept_id", LongType(), False), \
         StructField("concept_name", StringType(), False), \
         StructField("domain_id", StringType(), False), \
@@ -74,59 +90,196 @@ def loadOMOPVocabulary(table_name: str, file_path: str, file_name: str, spark_se
         StructField("concept_class_id", StringType(), False), \
         StructField("standard_concept", StringType(), True), \
         StructField("concept_code", StringType(), False), \
-        StructField("valid_start_date", IntegerType(), False), \
-        StructField("valid_end_date", IntegerType(), False), \
+        StructField("valid_start_date", DateType(), False), \
+        StructField("valid_end_date", DateType(), False), \
         StructField("invalid_reason", StringType(), True) \
         ])
 
-        df_load = spark_session.read.csv(os.path.join(file_path, file_name), sep="\t", header=True, schema=df_load_schema)
+        df_concept=spark_session.createDataFrame(df_load.select(\
+        df_load.concept_id, \
+        df_load.concept_name, \
+        df_load.domain_id, \
+        df_load.vocabulary_id, \
+        df_load.concept_class_id, \
+        df_load.standard_concept, \
+        df_load.concept_code, \
+        FSql.to_date(FSql.lpad(df_load.valid_start_date,8,'0'), 'yyyyMMdd').alias('valid_start_date'), \
+        FSql.to_date(FSql.lpad(df_load.valid_end_date,8,'0'), 'yyyyMMdd').alias('valid_end_date'), \
+        df_load.invalid_reason \
+        ).rdd, df_concept_schema)
 
-        # *************************************************************
-        # Input format: CONCEPT.CSV
-        # root
-        #  |-- concept_id: string (nullable = true)
-        #  |-- concept_name: string (nullable = true)
-        #  |-- domain_id: string (nullable = true)
-        #  |-- vocabulary_id: string (nullable = true)
-        #  |-- concept_class_id: string (nullable = true)
-        #  |-- standard_concept: string (nullable = true)
-        #  |-- concept_code: string (nullable = true)
-        #  |-- valid_start_date: string (nullable = true)
-        #  |-- valid_end_date: string (nullable = true)
-        #  |-- invalid_reason: string (nullable = true)
-        # *************************************************************
+        try:
+            df_concept.show()
+            df_concept.writeTo("bios.concept").append()
+            logger.info("Data succesully written to table CONCEPT")
+        except Exception as e:
+            logger.error("Error on writing data to OMOP Vocabulary: ", str(e))
 
-        if df_load.count() > 0:
-            df_concept_schema = StructType([ \
-            StructField("concept_id", LongType(), False), \
-            StructField("concept_name", StringType(), False), \
-            StructField("domain_id", StringType(), False), \
-            StructField("vocabulary_id", StringType(), False), \
-            StructField("concept_class_id", StringType(), False), \
-            StructField("standard_concept", StringType(), True), \
-            StructField("concept_code", StringType(), False), \
-            StructField("valid_start_date", DateType(), False), \
-            StructField("valid_end_date", DateType(), False), \
-            StructField("invalid_reason", StringType(), True) \
-            ])
 
-            df_concept=spark_session.createDataFrame(df_load.select(df_load.concept_id, \
-            df_load.concept_name, \
-            df_load.domain_id, \
-            df_load.vocabulary_id, \
-            df_load.concept_class_id, \
-            df_load.standard_concept, \
-            df_load.concept_code, \
-            FSql.to_date(FSql.lpad(df_load.valid_start_date,8,'0'), 'yyyyMMdd').alias('valid_start_date'), \
-            FSql.to_date(FSql.lpad(df_load.valid_end_date,8,'0'), 'yyyyMMdd').alias('valid_end_date'), \
-            df_load.invalid_reason \
-            ).rdd, df_concept_schema)
+def loadOMOPConceptClass(file_path: str, file_name: str, spark_session: SparkSession, logger: logging.Logger):
+#CONCEPT.csv           CONCEPT_CLASS.csv         CONCEPT_SYNONYM.csv  DRUG_STRENGTH.csv  VOCABULARY.csv  
+#CONCEPT_ANCESTOR.csv  CONCEPT_RELATIONSHIP.csv  DOMAIN.csv           RELATIONSHIP.csv
+    logger.info("Loading on table CONCEPT_CLASS started.")
+#CREATE TABLE concept_class (concept_class_id string NOT NULL, concept_class_name string NOT NULL, concept_class_concept_id bigint NOT NULL ) using iceberg;
 
-            try:
-                df_concept.show()
-                df_concept.writeTo("bios.concept").append()
-            except Exception as e:
-                logger.error("Error on writing data to OMOP Vocabulary:", str(e))
+    df_load_schema = StructType([ \
+    StructField("concept_class_id", LongType(), True), \
+    StructField("concept_class_name", StringType(), True), \
+    StructField("concept_class_concept_id", LongType(), True) \
+    ])
 
+    df_load = spark_session.read.csv(os.path.join(file_path, file_name), sep="\t", header=True, schema=df_load_schema)
+
+    if df_load.count() > 0:
+        df_concept_class_schema = StructType([ \
+        StructField("concept_class_id", LongType(), False), \
+        StructField("concept_class_name", StringType(), False), \
+        StructField("concept_class_concept_id", LongType(), False) \
+        ])
+
+        df_concept_class=spark_session.createDataFrame(df_load.select(\
+        df_load.concept_class_id, \
+        df_load.concept_class_name, \
+        df_load.concept_class_concept_id \
+        ).rdd, df_concept_class_schema)
+
+        try:
+            df_concept_class.show()
+            df_concept_class.writeTo("bios.concept_class").append()
+            logger.info("Data succesully written to table CONCEPT_CLASS")
+        except Exception as e:
+            logger.error("Error on writing data to OMOP Vocabulary: ", str(e))
+
+def loadOMOPConceptSynonym(file_path: str, file_name: str, spark_session: SparkSession, logger: logging.Logger):
+#CONCEPT.csv           CONCEPT_CLASS.csv         CONCEPT_SYNONYM.csv  DRUG_STRENGTH.csv  VOCABULARY.csv  
+#CONCEPT_ANCESTOR.csv  CONCEPT_RELATIONSHIP.csv  DOMAIN.csv           RELATIONSHIP.csv
+    logger.info("Loading on table CONCEPT_SYNONYM started.")
+#CREATE TABLE concept_synonym (concept_id bigint NOT NULL, concept_synonym_name string NOT NULL, language_concept_id bigint NOT NULL ) using iceberg;
+
+    df_load_schema = StructType([ \
+    StructField("concept_id", LongType(), True), \
+    StructField("concept_synonym_name", StringType(), True), \
+    StructField("language_concept_id", LongType(), True) \
+    ])
+
+    df_load = spark_session.read.csv(os.path.join(file_path, file_name), sep="\t", header=True, schema=df_load_schema)
+
+    if df_load.count() > 0:
+        df_concept_synonym_schema = StructType([ \
+        StructField("concept_id", LongType(), False), \
+        StructField("concept_synonym_name", StringType(), False), \
+        StructField("language_concept_id", LongType(), False) \
+        ])
+
+        df_concept_synonym=spark_session.createDataFrame(df_load.select(\
+        df_load.concept_id, \
+        df_load.concept_synonym_name, \
+        df_load.language_concept_id \
+        ).rdd, df_concept_synonym_schema)
+
+        try:
+            df_concept_synonym.show()
+            df_concept_synonym.writeTo("bios.concept_synonym").append()
+            logger.info("Data succesully written to table CONCEPT_SYNONYM")
+        except Exception as e:
+            logger.error("Error on writing data to OMOP Vocabulary: ", str(e))
+
+def loadOMOPDrugStrength(file_path: str, file_name: str, spark_session: SparkSession, logger: logging.Logger):
+#CONCEPT.csv           CONCEPT_CLASS.csv         CONCEPT_SYNONYM.csv  DRUG_STRENGTH.csv  VOCABULARY.csv  
+#CONCEPT_ANCESTOR.csv  CONCEPT_RELATIONSHIP.csv  DOMAIN.csv           RELATIONSHIP.csv
+    logger.info("Loading on table DRUG_STRENGTH started.")
+#CREATE TABLE drug_strength (drug_concept_id bigint NOT NULL, ingredient_concept_id bigint NOT NULL, amount_value float, amount_unit_concept_id bigint, numerator_value float, 
+# numerator_unit_concept_id bigint, denominator_value float, denominator_unit_concept_id bigint, box_size  integer, valid_start_date timestamp NOT NULL, 
+# valid_end_date timestamp NOT NULL, invalid_reason string ) using iceberg;
+
+    df_load_schema = StructType([ \
+    StructField("drug_concept_id", LongType(), False), \
+    StructField("ingredient_concept_id", LongType(), False), \ 
+    StructField("amount_value", DoubleType(), True), \ 
+    StructField("amount_unit_concept_id", LongType(), True), \ 
+    StructField("numerator_value", DoubleType(), True), \ 
+    StructField("numerator_unit_concept_id", LongType(), True), \ 
+    StructField("denominator_value", DoubleType(), True), \ 
+    StructField("denominator_unit_concept_id", LongType(), True), \ 
+    StructField("box_size",  IntegerType, True), \ 
+    StructField("valid_start_date", IntegerType(), False), \ 
+    StructField("valid_end_date", IntegerType(), False), \ 
+    StructField("invalid_reason", StringType(), True) \
+    ])
+
+    df_load = spark_session.read.csv(os.path.join(file_path, file_name), sep="\t", header=True, schema=df_load_schema)
+
+    if df_load.count() > 0:
+        df_iceberg_schema = StructType([ \
+        StructField("drug_concept_id", LongType(), False), \
+        StructField("ingredient_concept_id", LongType(), False), \
+        StructField("amount_value", DoubleType(), True), \
+        StructField("amount_unit_concept_id", LongType(), True), \
+        StructField("numerator_value", DoubleType(), True), \
+        StructField("numerator_unit_concept_id", LongType(), True), \
+        StructField("denominator_value", DoubleType(), True), \
+        StructField("denominator_unit_concept_id", LongType(), True), \
+        StructField("box_size",  IntegerType, True), \
+        StructField("valid_start_date", DateType(), False), \
+        StructField("valid_end_date", DateType(), False), \
+        StructField("invalid_reason", StringType(), True) \
+        ])
+
+        df_iceberg=spark_session.createDataFrame(df_load.select(\
+        df_load.drug_concept_id, \
+        df_load.ingredient_concept_id, \
+        df_load.amount_value, \
+        df_load.amount_unit_concept_id, \
+        df_load.numerator_value, \
+        df_load.numerator_unit_concept_id, \
+        df_load.denominator_value, \
+        df_load.denominator_unit_concept_id, \
+        df_load.box_size, \
+        df_load.valid_start_date, \
+        df_load.valid_end_date, \
+        df_load.invalid_reason \
+        ).rdd, df_iceberg_schema)
+
+        try:
+            df_iceberg.show()
+            df_iceberg.writeTo("bios.drug_strength").append()
+            logger.info("Data succesully written to table DRUG_STRENGTH")
+        except Exception as e:
+            logger.error("Error on writing data to OMOP Vocabulary: ", str(e))
+
+def loadOMOPVocabulary(file_path: str, file_name: str, spark_session: SparkSession, logger: logging.Logger):
+#CONCEPT.csv           CONCEPT_CLASS.csv         CONCEPT_SYNONYM.csv  DRUG_STRENGTH.csv  VOCABULARY.csv  
+#CONCEPT_ANCESTOR.csv  CONCEPT_RELATIONSHIP.csv  DOMAIN.csv           RELATIONSHIP.csv
+    logger.info("Loading on table VOCABULARY started.")
+#CREATE TABLE vocabulary (vocabulary_id string NOT NULL, vocabulary_name string NOT NULL, vocabulary_reference string, vocabulary_version string, vocabulary_concept_id bigint NOT NULL ) using iceberg;
+
+    df_load_schema = StructType([ \
+    StructField("vocabulary_id", StringType(), False), \
+    StructField("vocabulary_name", Stringtype(), False), \
+    StructField("vocabulary_reference", StringType(), True), \
+    StructField("vocabulary_version", StringType(), True), \
+    StructField("vocabulary_concept_id", LongType(), False) \ 
+    ])
+
+    df_load = spark_session.read.csv(os.path.join(file_path, file_name), sep="\t", header=True, schema=df_load_schema)
+
+    if df_load.count() > 0:
+        df_iceberg_schema = StructType([ \
+        StructField("vocabulary_id", StringType(), False), \
+        StructField("vocabulary_name", Stringtype(), False), \
+        StructField("vocabulary_reference", StringType(), True), \
+        StructField("vocabulary_version", StringType(), True), \
+        StructField("vocabulary_concept_id", LongType(), False) \ 
+        ])
+
+        df_iceberg=spark_session.createDataFrame(df_load.select(\
+        ).rdd, df_iceberg_schema)
+
+        try:
+            df_iceberg.show()
+            df_iceberg.writeTo("bios.vocabulary").append()
+            logger.info("Data succesully written to table VOCABULARY")
+        except Exception as e:
+            logger.error("Error on writing data to OMOP Vocabulary: ", str(e))
 
 
