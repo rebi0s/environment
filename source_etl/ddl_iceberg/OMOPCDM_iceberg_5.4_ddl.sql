@@ -105,7 +105,7 @@ CREATE TABLE domain (domain_id string NOT NULL, domain_name string NOT NULL, dom
 --HINT DISTRIBUTE ON RANDOM
 CREATE TABLE concept_class (concept_class_id string NOT NULL, concept_class_name string NOT NULL, concept_class_concept_id bigint NOT NULL ) using iceberg;
 --HINT DISTRIBUTE ON RANDOM
-CREATE TABLE concept_relationship (concept_id_1 integer NOT NULL, concept_id_2 integer NOT NULL, relationship_id string NOT NULL, valid_start_date timestamp NOT NULL, valid_end_date timestamp NOT NULL, invalid_reason string ) using iceberg;
+CREATE TABLE concept_relationship (concept_id_1 bigint NOT NULL, concept_id_2 bigint NOT NULL, relationship_id string NOT NULL, valid_start_date timestamp NOT NULL, valid_end_date timestamp NOT NULL, invalid_reason string ) using iceberg;
 --HINT DISTRIBUTE ON RANDOM
 CREATE TABLE relationship (relationship_id string NOT NULL, relationship_name string NOT NULL, is_hierarchical string NOT NULL, defines_ancestry string NOT NULL, reverse_relationship_id string NOT NULL, relationship_concept_id bigint NOT NULL ) using iceberg;
 --HINT DISTRIBUTE ON RANDOM
