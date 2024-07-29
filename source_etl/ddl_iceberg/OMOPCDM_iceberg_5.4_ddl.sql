@@ -1,47 +1,4 @@
---sql server CDM DDL Specification for OMOP Common Data Model 5.4
---drop table concept;
---drop table concept_classs;
---drop table vocabulary;
---drop table domain;
---drop table location;
---drop table care_site;
---drop table provider;
---drop table person;
---drop table visit_occurrence;
---drop table visit_detail;
---drop table relationship;
---drop table episode;
---drop table note;
---drop table cdm_source;
---drop table cohort_definition;
---drop table concept_ancestor;
---drop table concept_synonym;
---drop table condition_era;
---drop table drug_era;
---drop table episode_event;
---drop table observation_period;
---drop table concept_relationship;
---drop table dose_era;
---drop table fact_relationship;
---drop table metadata;
---drop table death;
---drop table note_nlp;
---drop table source_to_concept_map;
---drop table cost;
---drop table drug_strength;
---drop table specimen;
---drop table condition_occurrence;
---drop table drug_exposure;
---drop table procedure_occurrence;
---drop table device_exposure;
---drop table payer_plan_period;
---drop table observation;
---drop table measurement;
---drop table cohort;
-
-
-
-
+--Spark SQL for Iceberg CDM DDL Specification for OMOP Common Data Model 5.4
 --HINT DISTRIBUTE ON KEY (person_id)
 CREATE TABLE person (person_id bigint NOT NULL,gender_concept_id bigint NOT NULL,year_of_birth integer NOT NULL,month_of_birth integer,day_of_birth  integer,birth_timestamp timestamp,race_concept_id bigint NOT NULL,ethnicity_concept_id bigint NOT NULL,location_id bigint,provider_id bigint,care_site_id bigint,person_source_value string,gender_source_value string,gender_source_concept_id bigint,race_source_value string,race_source_concept_id bigint,ethnicity_source_value string,ethnicity_source_concept_id bigint ) using iceberg;
 --HINT DISTRIBUTE ON KEY (person_id)
@@ -120,27 +77,6 @@ CREATE TABLE drug_strength (drug_concept_id bigint NOT NULL, ingredient_concept_
 CREATE TABLE cohort (cohort_definition_id bigint NOT NULL, subject_id bigint NOT NULL, cohort_start_date timestamp NOT NULL, cohort_end_date timestamp NOT NULL ) using iceberg;
 --HINT DISTRIBUTE ON RANDOM
 CREATE TABLE cohort_definition (cohort_definition_id bigint NOT NULL, cohort_definition_name string NOT NULL, cohort_definition_description string, definition_type_concept_id bigint NOT NULL, cohort_definition_syntax string, subject_concept_id bigint NOT NULL, cohort_initiation_date timestamp ) using iceberg;
-
- -- relacionamento com a tabela person do omop
-        -- indica o sistema de origem dos dados (1-sinasc, 2-sim)
- -- código do município de naturalidade da mãe
- -- código de ocupação da mãe conforme tabela do cbo (código brasileiro de ocupações).
- -- código da uf de naturalidade da mãe
- -- data de nascimento da mãe: dd mm aaaa
-  -- data de nascimento da mãe em formato date
- -- escolaridade, em anos de estudo concluídos: 1 – nenhuma; 2 – 1 a 3 anos; 3 – 4 a 7 anos; 4 – 8 a 11 anos; 5 – 12 e mais; 9 – ignorado.
- -- escolaridade 2010. valores: 0 – sem escolaridade; 1 – fundamental i (1ª a 4ª série) using iceberg; 2 – fundamental ii (5ª a 8ª série) using iceberg; 3 – médio (antigo 2º grau) using iceberg; 4 – superior incompleto; 5 – superior completo; 9 – ignorado.
- -- escolaridade 2010 agregada. valores: 00 – sem escolaridade; 01 – fundamental i incompleto; 02 – fundamental i completo; 03 – fundamental ii incompleto; 04 – fundamental ii completo; 05 – ensino médio incompleto; 06 – ensino médio completo; 07 – superior incompleto; 08 – superior completo; 09 – ignorado; 10 – fundamental i incompleto ou inespecífico; 11 – fundamental ii incompleto ou inespecífico; 12 – ensino médio incompleto ou inespecífico.   
- -- situação conjugal da mãe: 1– solteira; 2– casada; 3– viúva; 4– separada judicialmente/divorciada; 5– união estável; 9– ignorada.
- -- idade da mãe
- -- se a mãe for estrangeira, constará o código do país de nascimento.
- -- 1 tipo de raça e cor da mãe: 1– branca; 2– preta; 3– amarela; 4– parda; 5– indígena.
- -- série escolar da mãe. valores de 1 a 8.
- -- idade do pai
- -- tipo do documento do responsável. valores: 1‐cnes; 2‐crm; 3‐ coren; 4‐rg; 5‐cpf.
- -- tipo de função do responsável pelo preenchimento. valores: 1– médico; 2– enfermeiro; 3– parteira; 4– funcionário do cartório; 5– outros.
- -- anomalia identificada: 1– sim; 2– não; 9– ignorado
- -- local de nascimento: 1 – hospital; 2 – outros estabelecimentos de saúde; 3 – domicílio; 4 – outros.
 
 Create table datasus_person (person_id  bigint not null,system_source_id  integer not null, city_origin integer,mother_city integer,state_origin  integer,mother_birth_date date, mother_birth_date_source_value integer, mother_years_of_study integer,mother_education_level integer,mother_education_level_aggregated integer,mother_marital_status  integer,mother_age   integer,mother_city_of_birth integer,mother_race integer,mother_elementary_school integer,father_age   integer,responsible_document_type  integer,responsible_role_type integer,place_of_birth_type_source_value integer, care_site_of_birth_source_value integer, mother_professional_occupation integer, mother_country_of_origin integer, number_of_dead_children integer, number_of_living_children integer, number_of_previous_pregnancies integer, number_of_previous_cesareans integer, number_of_previous_normal_born integer) using iceberg;
 

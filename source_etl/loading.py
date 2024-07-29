@@ -4,6 +4,20 @@
 # Command line syntax to execute with parameters
 # spark-submit --py-files /caminho/arquivo.py --conf spark.driver.extraJavaOptions="-Dparam1=valor1 -Dparam2=valor2"
 #
+# Execution parameters to control the execution profile:
+# arg[1]:profile
+#      INIT: Remove all existing tables and create new ones without data.
+#            arg[2]:filename => path and SQL filename to be executed
+#      VOCAB_OMOP: Run a specific set of routines to load OMOP vocabulary from CSV files to OMOP database in Iceberg
+#            arg[2]:filename => path to CSV files to be loaded as OMOP vocabulary
+#      DATASUS: Run a specific set of routines to load foreign info like: care site, locations, IDC10, etc. One execution is required for each foreing info.
+#            arg[2]:source system => indicates the origin of source file (i.e. CNES, CID10, CITY)
+#            arg[3]:filename => path and source filename to be executed. Each source file can have different extensions
+#      VOCAB_CTRNA: Run a specific set of routines to load CLIMATERNA vocabulary into OMOP database in Iceberg 
+#      ETL: Run the ETL process from source files to target OMOP database in Iceberg
+#            arg[2]:source system => indicates the origin of source file (i.e. SINASC, SIM, CLIMA)
+#            arg[3]:filename => path and source filename to be loaded. The file must be in a parquet format
+#
 # The following environment variables are available to config the execution. To avoid null values, the variables receive
 # default values, but those default values are not guarantee to work properly.
 #
@@ -30,18 +44,19 @@ spark = initSpark()
 # Mensagens de log
 logger.info('Spark session started.')
 
-# Environment variable to control the path of execution:
-# $CTRNA_PROFILE:
-#      INIT: Remove all existing tables and create new ones without data.
-#      VOCAB_OMOP: Run a specific set of routines to load OMOP vocabulary from CSV files to OMOP database in Iceberg
-#      DATASUS: Run a specific set of routines to load foreign info like: care site, locations, IDC10, etc.
-#      VOCAB_CTRNA: Run a specific set of routines to load CLIMATERNA vocabulary into OMOP database in Iceberg 
-#      ETL: Run the ETL process from source files to target OMOP database in Iceberg
+#get the number of input parameters
+num_args = len(sys.argv)
+
+#print(f"Número de argumentos passados: {num_args}")
+#for i in range(0, num_args):
+#	print(f"Argumento {i}: {sys.argv[i]}")
 
 if os.getenv("CTRNA_PROFILE", "NONE") == 'INIT':
 	try:
 		logger.info("Starting the database initialization. All data will be removed and tables re-created.")
 		#Obtain each parameter from command line for each execution profile
+		if num_args > 2:
+			logger.error("Check the command line usage. For INIT profile is required 1 parameter. Usage: submit-spark loadin.py  ")
 		param1, param2 = inputParameters(spark)
 		execute_sql_commands_from_file(spark, "caminho/para/seu/arquivo.sql")
 		logger.info("Database initialization finished with success.")
