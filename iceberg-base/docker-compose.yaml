@@ -18,7 +18,7 @@ services:
         container_name: rebios-pgadmin
         environment:
             PGADMIN_DEFAULT_EMAIL: pgadmin4@pgadmin.org
-            PGADMIN_DEFAULT_PASSWORD: admin
+            PGADMIN_DEFAULT_PASSWORD: 4VHHvI32F2*j
             GUNICORN_ACCESS_LOGFILE: /dev/null
         volumes:
             - ../../iceberg/pgadmin/var:/var/lib/pgadmin

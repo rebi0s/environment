@@ -149,6 +149,7 @@
                 MINIO_ROOT_PASSWORD="Eqcu3%#Gq6NV"
                 MINIO_PROMETHEUS_AUTH_TYPE=public
                 MINIO_CACHE="on"
+                MINIO_OPTS="--console-address ':8080'"
           tags:
             - minio
 

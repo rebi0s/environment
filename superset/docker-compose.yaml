@@ -1,0 +1,17 @@
+version: "3.7"
+services:
+    superset:
+        container_name: superset
+        image: apache/superset
+        ports:
+            - "8080:8088"
+        volumes:
+            - ~/minio/data:/data
+        environment:
+            - SUPERSET_SECRET_KEY=_97DXqpa1*g?5Uoi
+            - DATABASE_DB=superset
+            - DATABASE_HOST=host.docker.internal
+            - DATABASE_PORT=5420
+            - DATABASE_PASSWORD=7OL1LPsJ7SGI
+            - DATABASE_USER=sperset
+            - DATABASE_DIALECT=postgresql
