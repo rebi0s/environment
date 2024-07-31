@@ -32,6 +32,8 @@ from pyspark.sql.types import StructType, StructField, IntegerType, StringType, 
 from pyspark.sql.functions import monotonically_increasing_id
 from pyspark.sql import functions as FSql
 from utils import *
+from utils_vocab_omop import *
+from utils_datasus import *
 
 logger = configLogger('main');
 # o nível de log efetivamente registrado depende da variável de ambiente utilizada abaixo.
@@ -47,67 +49,78 @@ logger.info('Spark session started.')
 #get the number of input parameters
 num_args = len(sys.argv)
 
-#print(f"Número de argumentos passados: {num_args}")
-#for i in range(0, num_args):
-#	print(f"Argumento {i}: {sys.argv[i]}")
+profiles = ['INIT','VOCAB_OMOP','DATASUS','VOCAB_CTRNA', 'ETL']
 
-if os.getenv("CTRNA_PROFILE", "NONE") == 'INIT':
+if sys.argv[1] not in profiles:
+	logger.error("Check the command line usage. A profile not valid was used to invoke the script. The available choices are: INIT, VOCAB_OMOP, DATASUS, VOCAB_CTRNA, ETL.")
+	sys.exit(-1)
+
+if sys.argv[1] == 'INIT':
 	try:
 		logger.info("Starting the database initialization. All data will be removed and tables re-created.")
-		#Obtain each parameter from command line for each execution profile
-		if num_args > 2:
-			logger.error("Check the command line usage. For INIT profile is required 1 parameter. Usage: submit-spark loadin.py  ")
-		param1, param2 = inputParameters(spark)
-		execute_sql_commands_from_file(spark, "caminho/para/seu/arquivo.sql")
-		logger.info("Database initialization finished with success.")
+		if num_args != 3:
+			logger.error("Check the command line usage. For INIT profile, is required 1 parameter. Usage: submit-spark loading.py INIT /path/filename.sql")
+			sys.exit(-1)
+		execute_sql_commands_from_file(spark, sys.argv[2])
+		logger.info("INIT Profile executed with filename: ", sys.argv[2])
 		sys.exit(0)
 	except Exception as e:
-		logger.error("Error while recreating tables on OMOP database: ", str(e))
-if os.getenv("CTRNA_PROFILE", "NONE") == 'VOCAB_OMOP':
+		logger.error("Error while executing INIT profile on OMOP database: ", str(e))
+		sys.exit(-1)
+
+if sys.argv[1] == 'VOCAB_OMOP':
 	try:
+		if num_args != 3:
+			logger.error("Check the command line usage. For VOCAB_OMOP profile, 1 parameter is required. Usage: submit-spark loading.py VOCAB_OMOP /path_to_csv_files")
+			sys.exit(-1)
 		logger.info("Initiating OMOP Vocabulary loading.")
+		for filename in os.listdir(sys.argv[2]):
+			if filename == "CONCEPT.csv":
+				loadOMOPConcept(sys.argv[2], filename, spark, logger )
+			if filename == "CONCEPT_CLASS.csv":
+				loadOMOPConceptClass(sys.argv[2], filename, spark, logger )
+			if filename == "CONCEPT_SYNONYM.csv":
+				loadOMOPConceptSynonym(sys.argv[2], filename, spark, logger )
+			if filename == "DRUG_STRENGTH.csv":
+				loadOMOPDrugStrength(sys.argv[2], filename, spark, logger )
+			if filename == "VOCABULARY.csv":
+				loadOMOPVocabulary(sys.argv[2], filename, spark, logger )
+			if filename == "CONCEPT_ANCESTOR.csv":
+				loadOMOPConceptAncestor(sys.argv[2], filename, spark, logger )
+			if filename == "CONCEPT_RELATIONSHIP.csv":
+				loadOMOPConceptRelationship(sys.argv[2], filename, spark, logger )
+			if filename == "DOMAIN.csv":
+				loadOMOPDomain(sys.argv[2], filename, spark, logger )
+			if filename == "RELATIONSHIP.csv":
+				loadOMOPRelationship(sys.argv[2], filename, spark, logger )
 		logger.info("OMOP Vocabulary succesfully loaded to OMOP database.")
 		sys.exit(0)
 	except Exception as e:
 		logger.error("Error while writing data to OMOP Vocabulary: ", str(e))
-if os.getenv("CTRNA_PROFILE", "NONE") == 'DATASUS':
+		sys.exit(-1)
+
+if sys.argv[1] == 'DATASUS':
 	try:
 		logger.info("Loading external data from DATASUS to OMOP database.")
+		if sys.argv[2] == "CITI"
 		logger.info("External data from DATASUS succesfully loaded to OMOP database.")
 		sys.exit(0)
 	except Exception as e:
 		logger.error("Error while loading DATASUS data to OMOP database: ", str(e))
-if os.getenv("CTRNA_PROFILE", "NONE") == 'VOCAB_CTRNA':
+		sys.exit(-1)
+
+if sys.argv[1] == 'VOCAB_CTRNA':
 	try:
 		logger.info("Loading CLIMATERNA Vocabulary.")
 		logger.info("CLIMATERNA Vocabulary successfully loaded to OMOP Database.")
 		sys.exit(0)
 	except Exception as e:
 		logger.error("Error while writing CLIMATERNA Vocabulary to OMOP database: ", str(e))
-if os.getenv("CTRNA_PROFILE", "NONE") == 'ETL':
+		sys.exit(-1)
+
+if sys.argv[1] == 'ETL':
 	try:
 		logger.info("Initiating ETL processing from source files to OMOP database.")
-		#CREATE TABLE person (
-		#			person_id integer ,
-		#			gender_concept_id integer ,
-		#			year_of_birth integer ,
-		#			month_of_birth integer NULL,
-		#			day_of_birth integer NULL,
-		#			birth_datetime datetime NULL,
-		#			race_concept_id integer ,
-		#			ethnicity_concept_id integer ,
-		#			location_id integer NULL,
-		#			provider_id integer NULL,
-		#			care_site_id integer NULL,
-		#			person_source_value varchar(50) NULL,
-		#			gender_source_value varchar(50) NULL,
-		#			gender_source_concept_id integer NULL,
-		#			race_source_value varchar(50) NULL,
-		#			race_source_concept_id integer NULL,
-		#			ethnicity_source_value varchar(50) NULL,
-		#			ethnicity_source_concept_id integer NULL );
-
-
 		####################################################################
 		##  Leitura do arquivo de entrada (source)                        ##
 		####################################################################
@@ -181,6 +194,8 @@ if os.getenv("CTRNA_PROFILE", "NONE") == 'ETL':
 		# TPROBSON	Código do Grupo de Robson, gerado pelo sistema
 		# VERSAOSIST	Versão do sistema
 
+        df_cnes_tpunid = loadTypeOfUnit(spark, logger)
+	
 		#carga dos dados do parquet do SINASC
 		source_path = os.getenv("CTRNA_SOURCE_SINASC_PATH","/home/warehouse/")
 		arquivo_entrada = "sinasc_2010_2022.parquet"

@@ -1,3 +1,16 @@
+# inicialização
+import os
+import sys
+import logging
+from datetime import datetime
+from pyspark import SparkConf
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as FSql
+from utils import *
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DateType, TimestampType, LongType, DoubleType
+from py4j.java_gateway import java_import
+from typing import Tuple
+
 def loadCities(spark: SparkSession, logger: logging.Logger):
     #load dos municípios fazendo download de uma base pública
     municipios = [
@@ -54,6 +67,7 @@ def loadTypeOfUnit(spark: SparkSession, logger: logging.Logger):
     ]
     cnes_tpunid_cols = ["codigo","nome","conceptid"]
     df_cnes_tpunid = spark.createDataFrame(data=cnes_tpunid, schema = cnes_tpunid_cols)
+    return df_cnes_tpunid
 
 def loadCid10(spark: SparkSession, logger: logging.Logger):
     #load do cid10 com vocabulário do omop

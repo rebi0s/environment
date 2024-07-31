@@ -67,7 +67,7 @@ def addLogHandler(idLogger: logging.Logger, log_level: str):
 
 def execute_sql_commands_from_file(spark, file_path):
     df = spark.read.text(file_path)
-    # Dividir o conteúdo do arquivo em comandos individuais
+    
     commands = df.rdd.flatMap(lambda x: x[0].split(";")).collect()
     for command in commands:
         spark.sql(command)

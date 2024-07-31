@@ -1,3 +1,16 @@
+import os
+import sys
+import logging
+from datetime import datetime
+from pyspark import SparkConf
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as FSql
+from utils import *
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DateType, TimestampType, LongType, DoubleType
+from py4j.java_gateway import java_import
+from typing import Tuple
+
+
 def loadOMOPConcept(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
 #CONCEPT.csv           CONCEPT_CLASS.csv         CONCEPT_SYNONYM.csv  DRUG_STRENGTH.csv  VOCABULARY.csv  
 #CONCEPT_ANCESTOR.csv  CONCEPT_RELATIONSHIP.csv  DOMAIN.csv           RELATIONSHIP.csv
@@ -44,12 +57,9 @@ def loadOMOPConcept(file_path: str, file_name: str, spark: SparkSession, logger:
         df_load.invalid_reason \
         ).rdd, df_concept_schema)
 
-        try:
-            df_concept.show()
-            df_concept.writeTo("bios.concept").append()
-            logger.info("Data succesully written to table CONCEPT")
-        except Exception as e:
-            logger.error("Error while writing data to OMOP Vocabulary: ", str(e))
+        df_concept.show()
+        df_concept.writeTo("bios.concept").append()
+        logger.info("Data succesully written to table CONCEPT")
 
 
 def loadOMOPConceptClass(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
@@ -79,12 +89,9 @@ def loadOMOPConceptClass(file_path: str, file_name: str, spark: SparkSession, lo
         df_load.concept_class_concept_id \
         ).rdd, df_concept_class_schema)
 
-        try:
-            df_concept_class.show()
-            df_concept_class.writeTo("bios.concept_class").append()
-            logger.info("Data succesully written to table CONCEPT_CLASS")
-        except Exception as e:
-            logger.error("Error while writing data to OMOP Vocabulary: ", str(e))
+        df_concept_class.show()
+        df_concept_class.writeTo("bios.concept_class").append()
+        logger.info("Data succesully written to table CONCEPT_CLASS")
 
 def loadOMOPConceptSynonym(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
 #CONCEPT.csv           CONCEPT_CLASS.csv         CONCEPT_SYNONYM.csv  DRUG_STRENGTH.csv  VOCABULARY.csv  
@@ -113,12 +120,9 @@ def loadOMOPConceptSynonym(file_path: str, file_name: str, spark: SparkSession, 
         df_load.language_concept_id \
         ).rdd, df_concept_synonym_schema)
 
-        try:
-            df_concept_synonym.show()
-            df_concept_synonym.writeTo("bios.concept_synonym").append()
-            logger.info("Data succesully written to table CONCEPT_SYNONYM")
-        except Exception as e:
-            logger.error("Error while writing data to OMOP Vocabulary: ", str(e))
+        df_concept_synonym.show()
+        df_concept_synonym.writeTo("bios.concept_synonym").append()
+        logger.info("Data succesully written to table CONCEPT_SYNONYM")
 
 def loadOMOPDrugStrength(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
 #CONCEPT.csv           CONCEPT_CLASS.csv         CONCEPT_SYNONYM.csv  DRUG_STRENGTH.csv  VOCABULARY.csv  
@@ -176,12 +180,9 @@ def loadOMOPDrugStrength(file_path: str, file_name: str, spark: SparkSession, lo
         df_load.invalid_reason \
         ).rdd, df_iceberg_schema)
 
-        try:
-            df_iceberg.show()
-            df_iceberg.writeTo("bios.drug_strength").append()
-            logger.info("Data succesully written to table DRUG_STRENGTH")
-        except Exception as e:
-            logger.error("Error while writing data to OMOP Vocabulary: ", str(e))
+        df_iceberg.show()
+        df_iceberg.writeTo("bios.drug_strength").append()
+        logger.info("Data succesully written to table DRUG_STRENGTH")
 
 def loadOMOPVocabulary(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
 #CONCEPT.csv           CONCEPT_CLASS.csv         CONCEPT_SYNONYM.csv  DRUG_STRENGTH.csv  VOCABULARY.csv  
@@ -216,12 +217,9 @@ def loadOMOPVocabulary(file_path: str, file_name: str, spark: SparkSession, logg
         df_load.vocabulary_concept_id \
         ).rdd, df_iceberg_schema)
 
-        try:
-            df_iceberg.show()
-            df_iceberg.writeTo("bios.vocabulary").append()
-            logger.info("Data succesully written to table VOCABULARY")
-        except Exception as e:
-            logger.error("Error while writing data to OMOP Vocabulary: ", str(e))
+        df_iceberg.show()
+        df_iceberg.writeTo("bios.vocabulary").append()
+        logger.info("Data succesully written to table VOCABULARY")
 
 
 def loadOMOPConceptAncestor(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
@@ -254,12 +252,9 @@ def loadOMOPConceptAncestor(file_path: str, file_name: str, spark: SparkSession,
         df_load.max_levels_of_separation \
         ).rdd, df_iceberg_schema)
 
-        try:
-            df_iceberg.show()
-            df_iceberg.writeTo("bios.concept_ancestor").append()
-            logger.info("Data succesully written to table CONCEPT_ANCESTOR")
-        except Exception as e:
-            logger.error("Error while writing data to OMOP Vocabulary: ", str(e))
+        df_iceberg.show()
+        df_iceberg.writeTo("bios.concept_ancestor").append()
+        logger.info("Data succesully written to table CONCEPT_ANCESTOR")
 
 
 def loadOMOPConceptRelationship(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
@@ -298,12 +293,9 @@ def loadOMOPConceptRelationship(file_path: str, file_name: str, spark: SparkSess
         df_load.invalid_reason \
         ).rdd, df_iceberg_schema)
 
-        try:
-            df_iceberg.show()
-            df_iceberg.writeTo("bios.concept_relationship").append()
-            logger.info("Data succesully written to table CONCEPT_RELATIONSHIP")
-        except Exception as e:
-            logger.error("Error while writing data to OMOP Vocabulary: ", str(e))
+        df_iceberg.show()
+        df_iceberg.writeTo("bios.concept_relationship").append()
+        logger.info("Data succesully written to table CONCEPT_RELATIONSHIP")
 
 def loadOMOPDomain(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
 #CONCEPT.csv           CONCEPT_CLASS.csv         CONCEPT_SYNONYM.csv  DRUG_STRENGTH.csv  VOCABULARY.csv  
@@ -332,12 +324,9 @@ def loadOMOPDomain(file_path: str, file_name: str, spark: SparkSession, logger: 
         df_load.domain_concept_id \
         ).rdd, df_iceberg_schema)
 
-        try:
-            df_iceberg.show()
-            df_iceberg.writeTo("bios.domain").append()
-            logger.info("Data succesully written to table DOMAIN")
-        except Exception as e:
-            logger.error("Error while writing data to OMOP Vocabulary: ", str(e))
+        df_iceberg.show()
+        df_iceberg.writeTo("bios.domain").append()
+        logger.info("Data succesully written to table DOMAIN")
 
 def loadOMOPRelationship(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
 #CONCEPT.csv           CONCEPT_CLASS.csv         CONCEPT_SYNONYM.csv  DRUG_STRENGTH.csv  VOCABULARY.csv  
@@ -375,10 +364,7 @@ def loadOMOPRelationship(file_path: str, file_name: str, spark: SparkSession, lo
         df_load.relationship_concept_id \
         ).rdd, df_iceberg_schema)
 
-        try:
-            df_iceberg.show()
-            df_iceberg.writeTo("bios.relationship").append()
-            logger.info("Data succesully written to table RELATIONSHIP")
-        except Exception as e:
-            logger.error("Error while writing data to OMOP Vocabulary: ", str(e))
+        df_iceberg.show()
+        df_iceberg.writeTo("bios.relationship").append()
+        logger.info("Data succesully written to table RELATIONSHIP")
 
