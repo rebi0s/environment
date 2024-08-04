@@ -69,7 +69,7 @@ def loadTypeOfUnit(spark: SparkSession, logger: logging.Logger):
     df_cnes_tpunid = spark.createDataFrame(data=cnes_tpunid, schema = cnes_tpunid_cols)
     return df_cnes_tpunid
 
-def loadCid10(spark: SparkSession, logger: logging.Logger):
+def loadIdc10(spark: SparkSession, logger: logging.Logger):
     #load do cid10 com vocabulário do omop
     cid10 = [
     ('R19.3',45606798)    
@@ -116,8 +116,8 @@ def loadProviderRebios(spark: SparkSession, logger: logging.Logger):
     #CREATE TABLE provider (
     #			provider_id integer NOT NULL,
     #			provider_name varchar(255) NULL,
-    #			npi varchar(20) NULL,
-    #			dea varchar(20) NULL,
+    #			npi varchar(20) NULL,                    #código cnes dos estabelecimentos de saúde nos EUA
+    #			dea varchar(20) NULL,                    #código de registro do agente de saúde nos EUA
     #			specialty_concept_id integer NULL,
     #			care_site_id integer NULL,
     #			year_of_birth integer NULL,
@@ -128,48 +128,93 @@ def loadProviderRebios(spark: SparkSession, logger: logging.Logger):
     #			gender_source_value varchar(50) NULL,
     #			gender_source_concept_id integer NULL );
 
-    #Valor 1 mapeado para 4000621 [Obstetrician]
-    #Valor 2 mapeado para 32581 [Nurse]
-    #Valor 3 mapeado para 40561317 [Midwife]
-    #Valor 4 mapear com vocabulário do Climaterna
-    #Valor 9 mapear com vocabulário do Climaterna
-
     #registro do provider
-    #   rever esse insert para ser provider (df_condition_occur.identity, df_sinasc.identity, when df_sinasc.tpnascassi = 1 then 4000621 when df_sinasc.tpnascassi = 2 then 32581 when df_sinasc.tpnascassi = 3 then 40561317 when df_sinasc.tpnascassi = 4 then 999999 else 9999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.tpnascassi), # TPNASCASSI	Nascimento foi assistido por? Valores: 1– Médico; 2– Enfermeira/obstetriz; 3– Parteira; 4– Outros; 9– Ignorado
+    #   rever esse insert para ser provider (df_condition_occur.identity, df_sinasc.identity, when df_sinasc.tpnascassi = 1 then 4000621 when df_sinasc.tpnascassi = 2 then 32581 when df_sinasc.tpnascassi = 3 then 40561317 when df_sinasc.tpnascassi = 4 then 999999 else 9999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.tpnascassi), 
+    # # TPNASCASSI	Nascimento foi assistido por? Valores: 1– Médico; 2– Enfermeira/obstetriz; 3– Parteira; 4– Outros; 9– Ignorado
 
-    spark.sql("""insert into provider (
-                provider_id,
-                provider_name,
-                specialty_source_value,
-    )
-    values 
-    (df_provider.identity, 'Médico', 1)""")
-    spark.sql("""insert into provider (
-                provider_id,
-                provider_name,
-                specialty_source_value,
-    )
-    values (df_provider.identity, 'Enfermeira/obstetriz', 2)""")
-    spark.sql("""insert into provider (
-                provider_id,
-                provider_name,
-                specialty_source_value,
-    )
-    values (df_provider.identity, 'Parteira', 3)""")
-    spark.sql("""insert into provider (
-                provider_id,
-                provider_name,
-                specialty_source_value,
-    )
-    values (df_provider.identity, 'Outros', 4)""")
-    spark.sql("""insert into provider (
-                provider_id,
-                provider_name,
-                specialty_source_value,
-    )
-    values (df_provider.identity, 'Ignorado', 9)""")
+    try:
+        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)
+        values (1L, 4206451L, 'Médico', 1L)""")
+        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)
+        values (2L, 32581L, 'Enfermeira/obstetriz', 2L)""")
+        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)
+        values (3L, 40561317L, 'Parteira', 3L)""")
+        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)
+        values (4L, 3245354L, 'Outros', 4L)""")
+        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)
+        values (5L, 3400510L, 'Ignorado', 9L)""")
+    except Exception as e:
+        logger.error("Error while loading Provider data from DATASUS source to OMOP database: ", str(e))
+        sys.exit(-1)
+
 
 def loadCareSiteRebios(spark: SparkSession, logger: logging.Logger):
+
+#"CO_UNIDADE";"CO_CNES";"NU_CNPJ_MANTENEDORA";"TP_PFPJ";"NIVEL_DEP";"NO_RAZAO_SOCIAL";"NO_FANTASIA";"NO_LOGRADOURO";"NU_ENDERECO";"NO_COMPLEMENTO";"NO_BAIRRO";"CO_CEP";"CO_REGIAO_SAUDE";"CO_MICRO_REGIAO";"CO_DISTRITO_SANITARIO";"CO_DISTRITO_ADMINISTRATIVO";"NU_TELEFONE";"NU_FAX";"NO_EMAIL";"NU_CPF";"NU_CNPJ";"CO_ATIVIDADE";"CO_CLIENTELA";"NU_ALVARA";"DT_EXPEDICAO";"TP_ORGAO_EXPEDIDOR";"DT_VAL_LIC_SANI";"TP_LIC_SANI";"TP_UNIDADE";"CO_TURNO_ATENDIMENTO";"CO_ESTADO_GESTOR";"CO_MUNICIPIO_GESTOR";"TO_CHAR(DT_ATUALIZACAO,'DD/MM/YYYY')";"CO_USUARIO";"CO_CPFDIRETORCLN";"REG_DIRETORCLN";"ST_ADESAO_FILANTROP";"CO_MOTIVO_DESAB";"NO_URL";"NU_LATITUDE";"NU_LONGITUDE";"TO_CHAR(DT_ATU_GEO,'DD/MM/YYYY')";"NO_USUARIO_GEO";"CO_NATUREZA_JUR";"TP_ESTAB_SEMPRE_ABERTO";"ST_GERACREDITO_GERENTE_SGIF";"ST_CONEXAO_INTERNET";"CO_TIPO_UNIDADE";"NO_FANTASIA_ABREV";"TP_GESTAO";"TO_CHAR(DT_ATUALIZACAO_ORIGEM,'DD/MM/YYYY')";"CO_TIPO_ESTABELECIMENTO";"CO_ATIVIDADE_PRINCIPAL";"ST_CONTRATO_FORMALIZADO";"CO_TIPO_ABRANGENCIA"
+#"2609602569302";"2569302";"10404184000109";"3";"3";"PREFEITURA MUNICIPAL DE OLINDA";"USF BULTRINS MONTE II";"RUA PREFEITO MANOEL REGUEIRA";"540";"";"BULTRINS";"53320460";"001";"";"";"";"(81)34930626";"";"";"";"";"04";"02";"";"";"";"";"";"02";"03";"26";"260960";"28/11/2017";"ANA KARLA";"10258000449";"157002";"";"04";"";"";"";"";"";"1244";"N";"";"S";"";"";"M";"18/06/2003";"";"";"";""
+#"2609602571943";"2571943";"10404184000109";"3";"3";"PREFEITURA MUNICIPAL DE OLINDA";"UNIDADE MOVEL";"RUA DO SOL";"311";"";"CARMO";"53120010";"001";"";"02";"";"(81)34294465";"";"";"";"";"04";"01";"";"";"";"";"";"40";"01";"26";"260960";"08/07/2024";"ANA KARLA";"68887302472";"6191";"";"";"";"-8.0105168";"-34.8427588";"06/07/2023";"ANA";"1244";"N";"";"N";"";"";"M";"18/06/2003";"016";"001";"";""
+#"2609602344637";"2344637";"10404184000109";"3";"3";"PREFEITURA MUNICIPAL DE OLINDA";"USF ALTO DA MINA";"RUA AVENCA";"49";"";"ALTO DA MINA";"53250441";"001";"";"02";"";"(81)33051133";"";"";"";"";"04";"01";"";"";"";"";"";"02";"03";"26";"260960";"01/07/2024";"ANA KARLA";"03760998445";"322481";"";"";"";"-7.9944275";"-34.8534609";"03/08/2022";"ANA";"1244";"N";"";"S";"";"";"M";"30/10/2001";"001";"012";"";""
+#"2609602344696";"2344696";"10404184000109";"3";"3";"PREFEITURA MUNICIPAL DE OLINDA";"USF ILHA DE SANTANA I E II";"RUA DA INTEGRACAO";"S/N";"";"JARDIM ATLANTICO";"53060001";"001";"";"02";"";"(81)34324703";"";"";"";"";"04";"01";"";"";"";"";"";"02";"03";"26";"260960";"01/07/2024";"ANA KARLA";"58346740468";"1399172";"";"";"";"-8.0412002";"-34.879982";"06/07/2023";"ANA";"1244";"N";"";"S";"";"";"M";"30/10/2001";"001";"012";"";""
+#"3112002142295";"2142295";"";"3";"1";"FUNDACAO COMUNITARIA DE SAUDE DE CANDEIAS";"HOSPITAL CARLOS CHAGAS";"AVENIDA PEDRO VIEIRA DE AZEVEDO";"687";"";"CENTRO";"37280000";"15";"";"";"";"035-3833.-1285";"";"hospitalcarloschagas@yahoo.com.br";"";"19343383000129";"04";"03";"SRS/VS/DIV/139/2017";"28-set-2017 00:00:00";"1 ";"";"";"05";"06";"31";"311200";"03/04/2024";"ISABEL";"08722114602";"63649";"2";"";"";"-20.767";"-45.276";"30/04/2019";"ADRIANA";"3069";"S";"";"S";"";"";"M";"21/03/2002";"006";"009";"S";""
+#"3112602121506";"2121506";"";"3";"1";"LABORATORIO CENTRAL DE CAPINOPOLIS LTDA";"LABORATORIO CENTRAL";"AV 99";"613";"";"CENTRO";"38360000";"026";"";"";"";"(34)32631058";"";"";"";"18587469000134";"04";"03";"055/02/26";"28-mai-2002 00:00:00";"1 ";"";"";"39";"03";"31";"311260";"04/07/2008";"DADS";"";"";"";"02";"";"";"";"";"";"2000";"";"";"";"";"";"D";"12/03/2002";"";"";"";""
+#"3112902759861";"2759861";"";"3";"1";"LABORATORIO SANTA HELENA LTDA";"LABORATORIO SANTA HELENA";"AV MANOEL FRANCISCO DE FREITAS";"57";"";"CENTRO";"36925000";"024";"";"";"";"(31)38735235";"";"laboratoriostahelena@ig.com.br";"";"02135527000159";"04";"03";"";"";"";"";"";"39";"03";"31";"311290";"20/06/2023";"SMSCAPUTIRA";"08001522636";"23679";"";"";"";"-20.172";"-42.271";"17/07/2019";"SMSCAPUTIRA";"2062";"N";"";"S";"";"";"M";"12/09/2003";"018";"002";"";""    
+
+#"CO_UNIDADE"
+#"CO_CNES"
+#"NU_CNPJ_MANTENEDORA"
+#"TP_PFPJ"
+#"NIVEL_DEP"
+#"NO_RAZAO_SOCIAL"
+#"NO_FANTASIA"
+#"NO_LOGRADOURO"
+#"NU_ENDERECO"
+#"NO_COMPLEMENTO"
+#"NO_BAIRRO"
+#"CO_CEP"
+#"CO_REGIAO_SAUDE"
+#"CO_MICRO_REGIAO"
+#"CO_DISTRITO_SANITARIO"
+#"CO_DISTRITO_ADMINISTRATIVO"
+#"NU_TELEFONE"
+#"NU_FAX"
+#"NO_EMAIL"
+#"NU_CPF"
+#"NU_CNPJ"
+#"CO_ATIVIDADE"
+#"CO_CLIENTELA"
+#"NU_ALVARA"
+#"DT_EXPEDICAO"
+#"TP_ORGAO_EXPEDIDOR"
+#"DT_VAL_LIC_SANI"
+#"TP_LIC_SANI"
+#"TP_UNIDADE"
+#"CO_TURNO_ATENDIMENTO"
+#"CO_ESTADO_GESTOR"
+#"CO_MUNICIPIO_GESTOR"
+#"TO_CHAR(DT_ATUALIZACAO,'DD/MM/YYYY')"
+#"CO_USUARIO"
+#"CO_CPFDIRETORCLN"
+#"REG_DIRETORCLN"
+#"ST_ADESAO_FILANTROP"
+#"CO_MOTIVO_DESAB"
+#"NO_URL"
+#"NU_LATITUDE"
+#"NU_LONGITUDE"
+#"TO_CHAR(DT_ATU_GEO,'DD/MM/YYYY')"
+#"NO_USUARIO_GEO"
+#"CO_NATUREZA_JUR"
+#"TP_ESTAB_SEMPRE_ABERTO"
+#"ST_GERACREDITO_GERENTE_SGIF"
+#"ST_CONEXAO_INTERNET"
+#"CO_TIPO_UNIDADE"
+#"NO_FANTASIA_ABREV"
+#"TP_GESTAO"
+#"TO_CHAR(DT_ATUALIZACAO_ORIGEM,'DD/MM/YYYY')"
+#"CO_TIPO_ESTABELECIMENTO"
+#"CO_ATIVIDADE_PRINCIPAL"
+#"ST_CONTRATO_FORMALIZADO"
+#"CO_TIPO_ABRANGENCIA"
+
     #CREATE TABLE care_site (
     #			care_site_id integer ,
     #			care_site_name varchar(255) NULL,
@@ -178,62 +223,110 @@ def loadCareSiteRebios(spark: SparkSession, logger: logging.Logger):
     #			care_site_source_value varchar(50) NULL,
     #			place_of_service_source_value varchar(50) NULL );
 
+    #esses dois estabelecimentos são valores pré-definidos próprios do Climaterna
+    #não existe registro em location correspondente
+    spark.sql("""insert into care_site(care_site_id,care_site_name,place_of_service_concept_id,location_id,care_site_source_value,place_of_service_source_value)
+    values (3, 'Nascimento no Domicílio', 43021744, null, null, 'Domicílio')""")   #43021744 Born at home
+    spark.sql("""insert into care_site(care_site_id,care_site_name,place_of_service_concept_id,location_id,care_site_source_value,place_of_service_source_value)
+    values (4, "Nascimento em Outros Locais", 45881550, null, null, "Outros")""") #45881550 Place of birth unknown
+
     # os estabelecimentos de saúde serão cadastrados em location e repetidos como care_site por falta de detalhes no SIM/SINASC. O care_site terá FK do location.
-    spark.sql("""insert into care_site(
-                care_site_id,
-                care_site_name,
-                place_of_service_concept_id,
-                location_id,
-                care_site_source_value,
-                place_of_service_source_value)
-    values
-    (3, 'Nascimento no Domicílio', 43021744, null, null, 'Domicílio')""")   #43021744 Born at home
-    spark.sql("""insert into care_site(
-                care_site_id,
-                care_site_name,
-                place_of_service_concept_id,
-                location_id,
-                care_site_source_value,
-                place_of_service_source_value)
-    values
-    (4, "Nascimento em Outros Locais", 45881550, null, null, "Outros")""") #45881550 Place of birth unknown
+    # A partir desse ponto acontece a inserção em lote dos estabelecimentos de saúde a partir da base CNES
+
     #retorna o nome do estabelecimento
     #retorna o concept_id do tipo da unidade do estabelcimento. essa correspondência foi feita no df_cnes_tpunid.
     # obtém o location_id com o endereço gerado para o respectivo estabelecimento de saúde na tabela location
-    spark.sql("""insert into care_site(
-                care_site_id,
-                care_site_name,
-                place_of_service_concept_id,
-                location_id,
-                care_site_source_value,
-                place_of_service_source_value)
-    values
-    (
-    df_care_site.identity,
-    df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))), 
-    df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))), 
-    (select location_id from location where location_source_value = replace(df_sinasc.codestab,'.')), 
-    df_sinasc.codestab,
-    null
-    )""")
+#    spark.sql("""insert into care_site(
+#                care_site_id,                              CO_CNES
+#                care_site_name,                            NO_RAZAO_SOCIAL
+#                place_of_service_concept_id,
+#                location_id,                               CO_CNES
+#                care_site_source_value,                    
+#                place_of_service_source_value)
+#    values
+#    (
+#    df_care_site.identity,
+#    df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))), 
+#    df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))), 
+#    (select location_id from location where location_source_value = replace(df_sinasc.codestab,'.')), 
+#    df_sinasc.codestab,
+#    null
+#    )""")
 
 def loadLocationRebios(spark: SparkSession, logger: logging.Logger):
     #load dos estabelecimentos de saúde CNES. Cada establecimento de saúde é uma location que se repete no care_site visto que não temos dados das divisões/unidades dos estabelecimentos de saúde.
     #"1200452000725";"2000725";"04034526000143";"3";"3";"SECRETARIA DE ESTADO DE SAUDE";"HOSPITAL DR ARY RODRIGUES";"AV SENADOR EDUARDO ASSMAR";"153";"";"COHAB";"69925000";"001";"";"";"";"(68)3232 2956";"";"hospitalaryrodrigues201705@gmail.com";"";"04034526001115";"04";"03";"";"";"";"";"";"05";"06";"12";"120045";"27/03/2024";"SCNES";"63786311234";"";"";"";"";"-10.151";"-67.736";"11/07/2019";"SCNES";"1023";"S";"";"S";"";"";"E";"30/10/2001";"006";"009";"";""
 
+    # Tendo como source o CSV tbEstabelecimento999999.csv contendo os estabelecimentos de saúde. Um registro equivalente é adicionado na tabela caresite
     #CREATE TABLE location (
-    #			location_id integer ,
-    #			address_1 varchar(50) NULL,
-    #			address_2 varchar(50) NULL,
-    #			city varchar(50) NULL,
-    #			state varchar(2) NULL,
-    #			zip varchar(9) NULL,
+    #			location_id integer ,                        CO_CNES
+    #			address_1 varchar(50) NULL,                  NO_LOGRADOURO + NU_ENDERECO + NO_COMPLEMENTO 
+    #			address_2 varchar(50) NULL,                  NO_BAIRRO
+    #			city varchar(50) NULL,                       CO_MUNICIPIO_GESTOR
+    #			state varchar(2) NULL,                       CO_ESTADO_GESTOR
+    #			zip varchar(9) NULL,                         CO_CEP
     #			county varchar(20) NULL,
-    #			location_source_value varchar(50) NULL,
-    #			country_concept_id integer NULL,
-    #			country_source_value varchar(80) NULL,
-    #			latitude float NULL,
-    #			longitude float NULL );
+    #			location_source_value varchar(50) NULL,      CO_UNIDADE
+    #			country_concept_id integer NULL,             4075645L
+    #			country_source_value varchar(80) NULL,       'Brasil'
+    #			latitude float NULL,                         NU_LATITUDE
+    #			longitude float NULL );                      NU_LONGITUDE
+
+#"CO_UNIDADE"
+#"CO_CNES"
+#"NU_CNPJ_MANTENEDORA"
+#"TP_PFPJ"
+#"NIVEL_DEP"
+#"NO_RAZAO_SOCIAL"
+#"NO_FANTASIA"
+#"NO_LOGRADOURO"
+#"NU_ENDERECO"
+#"NO_COMPLEMENTO"
+#"NO_BAIRRO"
+#"CO_CEP"
+#"CO_REGIAO_SAUDE"
+#"CO_MICRO_REGIAO"
+#"CO_DISTRITO_SANITARIO"
+#"CO_DISTRITO_ADMINISTRATIVO"
+#"NU_TELEFONE"
+#"NU_FAX"
+#"NO_EMAIL"
+#"NU_CPF"
+#"NU_CNPJ"
+#"CO_ATIVIDADE"
+#"CO_CLIENTELA"
+#"NU_ALVARA"
+#"DT_EXPEDICAO"
+#"TP_ORGAO_EXPEDIDOR"
+#"DT_VAL_LIC_SANI"
+#"TP_LIC_SANI"
+#"TP_UNIDADE"
+#"CO_TURNO_ATENDIMENTO"
+#"CO_ESTADO_GESTOR"
+#"CO_MUNICIPIO_GESTOR"
+#"TO_CHAR(DT_ATUALIZACAO,'DD/MM/YYYY')"
+#"CO_USUARIO"
+#"CO_CPFDIRETORCLN"
+#"REG_DIRETORCLN"
+#"ST_ADESAO_FILANTROP"
+#"CO_MOTIVO_DESAB"
+#"NO_URL"
+#"NU_LATITUDE"
+#"NU_LONGITUDE"
+#"TO_CHAR(DT_ATU_GEO,'DD/MM/YYYY')"
+#"NO_USUARIO_GEO"
+#"CO_NATUREZA_JUR"
+#"TP_ESTAB_SEMPRE_ABERTO"
+#"ST_GERACREDITO_GERENTE_SGIF"
+#"ST_CONEXAO_INTERNET"
+#"CO_TIPO_UNIDADE"
+#"NO_FANTASIA_ABREV"
+#"TP_GESTAO"
+#"TO_CHAR(DT_ATUALIZACAO_ORIGEM,'DD/MM/YYYY')"
+#"CO_TIPO_ESTABELECIMENTO"
+#"CO_ATIVIDADE_PRINCIPAL"
+#"ST_CONTRATO_FORMALIZADO"
+#"CO_TIPO_ABRANGENCIA"
 
     # Estrutura SINASC até 2019
     ################################

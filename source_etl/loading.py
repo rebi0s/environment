@@ -99,10 +99,36 @@ if sys.argv[1] == 'VOCAB_OMOP':
 		logger.error("Error while writing data to OMOP Vocabulary: ", str(e))
 		sys.exit(-1)
 
+#*************************
+# usage:
+#  submit-spark loading.py DATASUS -city /path_to_folder_with_cities
+#  submit-spark loading.py DATASUS -care /path_to_folder_with_care_sites
+#  submit-spark loading.py DATASUS -idc10 /path_to_folder_with_icd10
+#  
+#*************************
+
 if sys.argv[1] == 'DATASUS':
 	try:
+		if num_args == 4:
+			logger.error("Check the command line usage. For DATASUS profile 2 parameters are required.")
+			logger.error("Usage: ")
+			logger.error("   submit-spark loading.py DATASUS -city /path_to_folder_with_cities")
+			logger.error("   submit-spark loading.py DATASUS -care /path_to_folder_with_care_sites")
+			logger.error("   submit-spark loading.py DATASUS -idc10 /path_to_folder_with_icd10")
+			sys.exit(-1)
+
 		logger.info("Loading external data from DATASUS to OMOP database.")
-		if sys.argv[2] == "CITI"
+		if sys.argv[2] == "-city":
+			#loadStates(spark, logger, sys.argv[3])
+			loadCities(spark, logger, sys.argv[3])
+		if sys.argv[2] == "-care":
+			loadLocationRebios(spark, logger, sys.argv[3])
+			loadTypeOfUnit(spark, logger, sys.argv[3])
+			loadCareSiteRebios(spark, logger, sys.argv[3])
+			loadProviderRebios(spark, logger, sys.argv[3])
+		if sys.argv[2] == "-idc10":
+			loadIdc10(spark, logger, sys.argv[3])
+
 		logger.info("External data from DATASUS succesfully loaded to OMOP database.")
 		sys.exit(0)
 	except Exception as e:
@@ -194,8 +220,6 @@ if sys.argv[1] == 'ETL':
 		# TPROBSON	Código do Grupo de Robson, gerado pelo sistema
 		# VERSAOSIST	Versão do sistema
 
-        df_cnes_tpunid = loadTypeOfUnit(spark, logger)
-	
 		#carga dos dados do parquet do SINASC
 		source_path = os.getenv("CTRNA_SOURCE_SINASC_PATH","/home/warehouse/")
 		arquivo_entrada = "sinasc_2010_2022.parquet"
@@ -230,11 +254,13 @@ if sys.argv[1] == 'ETL':
 
 		#df_sinasc = spark.read.format("CSV").options(header=True, inferSchema=True).load("/home/src/etl/SINASC_REGISTRO_LAIS.csv")
 
-		# dataframe com todos os registros de location
+        # dataframe with records of Type Of Health Unit
+		df_cnes_tpunid = spark.read.format("iceberg").load(f"bios.type_of_unit")
+		# dataframe with existing location records
 		df_location = spark.read.format("iceberg").load(f"bios.location")
-		# dataframe com todos os registros de care_site
+		# dataframe with existing care_sites
 		df_care_site = spark.read.format("iceberg").load(f"bios.care_site")
-		# dataframe com todos os registros de concept
+		# dataframe with concept records
 		df_concept = spark.read.format("iceberg").load(f"bios.concept")
 
 		#obtem o max person_id para usar na inserção de novos registros
