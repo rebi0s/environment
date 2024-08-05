@@ -151,6 +151,12 @@ if sys.argv[1] == 'ETL':
 		##  Leitura do arquivo de entrada (source)                        ##
 		####################################################################
 
+#|ORIGEM|CODCART|NUMREGCART|DTREGCART|CODESTAB|CODMUNNASC|LOCNASC|IDADEMAE|ESTCIVMAE|ESCMAE|CODOCUPMAE|QTDFILVIVO|QTDFILMORT|CODMUNRES|CODPAISRES|GESTACAO|GRAVIDEZ|PARTO|CONSULTAS|  DTNASC|HORANASC|SEXO|APGAR1|APGAR5|RACACOR|PESO|IDANOMAL|DTCADASTRO|CODANOMAL|NUMEROLOTE|VERSAOSIST|DTRECEBIM|DIFDATA|DTRECORIG|NATURALMAE|CODMUNNATU|SERIESCMAE|DTNASCMAE|RACACORMAE|QTDGESTANT|QTDPARTNOR|QTDPARTCES|IDADEPAI|DTULTMENST|SEMAGESTAC|TPMETESTIM|CONSPRENAT|MESPRENAT|TPAPRESENT|STTRABPART|STCESPARTO|TPROBSON|STDNEPIDEM|STDNNOVA|RACACOR_RN|RACACORN|ESCMAE2010|CODMUNCART|CODUFNATU|TPNASCASSI|ESCMAEAGR1|DTRECORIGA|TPFUNCRESP|TPDOCRESP|DTDECLARAC|PARIDADE|KOTELCHUCK|
+#+------+-------+----------+---------+--------+----------+-------+--------+---------+------+----------+----------+----------+---------+----------+--------+--------+-----+---------+--------+--------+----+------+------+-------+----+--------+----------+---------+----------+----------+---------+-------+---------+----------+----------+----------+---------+----------+----------+----------+----------+--------+----------+----------+----------+----------+---------+----------+----------+----------+--------+----------+--------+----------+--------+----------+----------+---------+----------+----------+----------+----------+---------+----------+--------+----------+
+#|     1|   5096|      null|     null| 2515598|    110002|      1|      24|        2|     4|      null|        01|      null|   120040|         1|       5|       1|    2|        4|07052010|    1155|   1|    09|    10|      1|3400|       2|  10062010|     null|  20100005|    2.2.08| 17062010|     41| 17062010|      null|      null|      null|     null|      null|      null|      null|      null|    null|      null|      null|      null|      null|     null|      null|      null|      null|    null|         0|       0|      null|    null|      null|      null|     null|      null|      null|      null|      null|     null|      null|    null|      null|
+#|     1|   null|      null|     null| 3792595|    110011|      1|      22|        2|     4|    999992|        01|        00|   120040|         1|       5|       1|    2|        3|03062010|    0948|   1|    08|    09|      4|3950|       2|  01072010|     null|  20100007|    2.2.08| 06072010|     33| 06072010|      null|      null|      null|     null|      null|      null|      null|      null|    null|      null|      null|      null|      null|     null|      null|      null|      null|    null|         0|       0|      null|    null|      null|      null|     null|      null|      null|      null|      null|     null|      null|    null|      null|
+#|     1|   null|      null|     null| 2798484|    110030|      1|      20|        1|     3|    999992|        01|        00|   120040|         1|       5|       1|    1|        4|23022010|    1123|   1|    08|    09|      1|3550|       2|  15032010|     null|  20100003|    2.2.07| 16042010|     52| 16042010|      null|      null|      null|     null|      null|      null|      null|      null|    null|      null|      null|      null|      null|     null|      null|      null|      null|    null|         0|       0|      null|    null|      null|      null|     null|      null|      null|      null|      null|     null|      null|    null|      null|
+
 		# APGAR1	Apgar no 1º minuto
 		# APGAR5	Apgar no 5º minuto
 		# CODANOMAL	Código da anomalia (CID 10)
@@ -219,6 +225,78 @@ if sys.argv[1] == 'ETL':
 		# TPNASCASSI	Nascimento foi assistido por? Valores: 1– Médico; 2– Enfermeira/obstetriz; 3– Parteira; 4– Outros; 9– Ignorado
 		# TPROBSON	Código do Grupo de Robson, gerado pelo sistema
 		# VERSAOSIST	Versão do sistema
+
+
+#>>> df.printSchema()
+#root
+# |-- APGAR1: string (nullable = true)
+# |-- APGAR5: string (nullable = true)
+# |-- CODANOMAL: string (nullable = true)
+# |-- CODCART: string (nullable = true)
+# |-- CODESTAB: string (nullable = true)
+# |-- CODMUNCART: string (nullable = true)
+# |-- CODMUNNASC: string (nullable = true)
+# |-- CODMUNNATU: string (nullable = true)
+# |-- CODMUNRES: string (nullable = true)
+# |-- CODOCUPMAE: string (nullable = true)
+# |-- CODPAISRES: string (nullable = true)
+# |-- CODUFNATU: string (nullable = true)
+# |-- CONSPRENAT: string (nullable = true)
+# |-- CONSULTAS: string (nullable = true)
+# |-- DIFDATA: string (nullable = true)
+# |-- DTCADASTRO: string (nullable = true)
+# |-- DTDECLARAC: string (nullable = true)
+# |-- DTNASC: string (nullable = true)
+# |-- DTNASCMAE: string (nullable = true)
+# |-- DTRECEBIM: string (nullable = true)
+# |-- DTRECORIG: string (nullable = true)
+# |-- DTRECORIGA: string (nullable = true)
+# |-- DTREGCART: string (nullable = true)
+# |-- DTULTMENST: string (nullable = true)
+# |-- ESCMAE: string (nullable = true)
+# |-- ESCMAE2010: string (nullable = true)
+# |-- ESCMAEAGR1: string (nullable = true)
+# |-- ESTCIVMAE: string (nullable = true)
+# |-- GESTACAO: string (nullable = true)
+# |-- GRAVIDEZ: string (nullable = true)
+# |-- HORANASC: string (nullable = true)
+# |-- IDADEMAE: string (nullable = true)
+# |-- IDADEPAI: string (nullable = true)
+# |-- IDANOMAL: string (nullable = true)
+# |-- KOTELCHUCK: string (nullable = true)
+# |-- LOCNASC: string (nullable = true)
+# |-- MESPRENAT: string (nullable = true)
+# |-- NATURALMAE: string (nullable = true)
+# |-- NUMEROLOTE: string (nullable = true)
+# |-- NUMREGCART: string (nullable = true)
+# |-- ORIGEM: string (nullable = true)
+# |-- PARIDADE: string (nullable = true)
+# |-- PARTO: string (nullable = true)
+# |-- PESO: string (nullable = true)
+# |-- QTDFILMORT: string (nullable = true)
+# |-- QTDFILVIVO: string (nullable = true)
+# |-- QTDGESTANT: string (nullable = true)
+# |-- QTDPARTCES: string (nullable = true)
+# |-- QTDPARTNOR: string (nullable = true)
+# |-- RACACOR_RN: string (nullable = true)
+# |-- RACACOR: string (nullable = true)
+# |-- RACACORMAE: string (nullable = true)
+# |-- RACACORN: string (nullable = true)
+# |-- SEMAGESTAC: string (nullable = true)
+# |-- SERIESCMAE: string (nullable = true)
+# |-- SEXO: string (nullable = true)
+# |-- STCESPARTO: string (nullable = true)
+# |-- STDNEPIDEM: string (nullable = true)
+# |-- STDNNOVA: string (nullable = true)
+# |-- STTRABPART: string (nullable = true)
+# |-- TPAPRESENT: string (nullable = true)
+# |-- TPDOCRESP: string (nullable = true)
+# |-- TPFUNCRESP: string (nullable = true)
+# |-- TPMETESTIM: string (nullable = true)
+# |-- TPNASCASSI: string (nullable = true)
+# |-- TPROBSON: string (nullable = true)
+# |-- VERSAOSIST: string (nullable = true)
+
 
 		#carga dos dados do parquet do SINASC
 		source_path = os.getenv("CTRNA_SOURCE_SINASC_PATH","/home/warehouse/")

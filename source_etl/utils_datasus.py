@@ -7,9 +7,11 @@ from pyspark import SparkConf
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as FSql
 from utils import *
-from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DateType, TimestampType, LongType, DoubleType
+from pyspark.sql.functions import monotonically_increasing_id
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DateType, TimestampType, LongType, DoubleType, FloatType
 from py4j.java_gateway import java_import
 from typing import Tuple
+import pandas as pd
 
 def loadCities(spark: SparkSession, logger: logging.Logger):
     #load dos municípios fazendo download de uma base pública
@@ -147,7 +149,6 @@ def loadProviderRebios(spark: SparkSession, logger: logging.Logger):
         logger.error("Error while loading Provider data from DATASUS source to OMOP database: ", str(e))
         sys.exit(-1)
 
-
 def loadCareSiteRebios(spark: SparkSession, logger: logging.Logger):
 
 #"CO_UNIDADE";"CO_CNES";"NU_CNPJ_MANTENEDORA";"TP_PFPJ";"NIVEL_DEP";"NO_RAZAO_SOCIAL";"NO_FANTASIA";"NO_LOGRADOURO";"NU_ENDERECO";"NO_COMPLEMENTO";"NO_BAIRRO";"CO_CEP";"CO_REGIAO_SAUDE";"CO_MICRO_REGIAO";"CO_DISTRITO_SANITARIO";"CO_DISTRITO_ADMINISTRATIVO";"NU_TELEFONE";"NU_FAX";"NO_EMAIL";"NU_CPF";"NU_CNPJ";"CO_ATIVIDADE";"CO_CLIENTELA";"NU_ALVARA";"DT_EXPEDICAO";"TP_ORGAO_EXPEDIDOR";"DT_VAL_LIC_SANI";"TP_LIC_SANI";"TP_UNIDADE";"CO_TURNO_ATENDIMENTO";"CO_ESTADO_GESTOR";"CO_MUNICIPIO_GESTOR";"TO_CHAR(DT_ATUALIZACAO,'DD/MM/YYYY')";"CO_USUARIO";"CO_CPFDIRETORCLN";"REG_DIRETORCLN";"ST_ADESAO_FILANTROP";"CO_MOTIVO_DESAB";"NO_URL";"NU_LATITUDE";"NU_LONGITUDE";"TO_CHAR(DT_ATU_GEO,'DD/MM/YYYY')";"NO_USUARIO_GEO";"CO_NATUREZA_JUR";"TP_ESTAB_SEMPRE_ABERTO";"ST_GERACREDITO_GERENTE_SGIF";"ST_CONEXAO_INTERNET";"CO_TIPO_UNIDADE";"NO_FANTASIA_ABREV";"TP_GESTAO";"TO_CHAR(DT_ATUALIZACAO_ORIGEM,'DD/MM/YYYY')";"CO_TIPO_ESTABELECIMENTO";"CO_ATIVIDADE_PRINCIPAL";"ST_CONTRATO_FORMALIZADO";"CO_TIPO_ABRANGENCIA"
@@ -216,61 +217,41 @@ def loadCareSiteRebios(spark: SparkSession, logger: logging.Logger):
 #"CO_TIPO_ABRANGENCIA"
 
     #CREATE TABLE care_site (
-    #			care_site_id integer ,
-    #			care_site_name varchar(255) NULL,
+    #			care_site_id integer ,                                 PK gerada pelo ETL
+    #			care_site_name varchar(255) NULL,                      NO_RAZAO_SOCIAL
     #			place_of_service_concept_id integer NULL,
-    #			location_id integer NULL,
-    #			care_site_source_value varchar(50) NULL,
+    #			location_id integer NULL,                              PK da location
+    #			care_site_source_value varchar(50) NULL,               CO_CNES
     #			place_of_service_source_value varchar(50) NULL );
 
     #esses dois estabelecimentos são valores pré-definidos próprios do Climaterna
     #não existe registro em location correspondente
     spark.sql("""insert into care_site(care_site_id,care_site_name,place_of_service_concept_id,location_id,care_site_source_value,place_of_service_source_value)
-    values (3, 'Nascimento no Domicílio', 43021744, null, null, 'Domicílio')""")   #43021744 Born at home
+    values (3L, 'Nascimento no Domicílio', 43021744L, null, 3L, 'Domicílio')""")   #43021744 Born at home
     spark.sql("""insert into care_site(care_site_id,care_site_name,place_of_service_concept_id,location_id,care_site_source_value,place_of_service_source_value)
-    values (4, "Nascimento em Outros Locais", 45881550, null, null, "Outros")""") #45881550 Place of birth unknown
+    values (4L, "Nascimento em Outros Locais", 45881550L, null, 4L, "Outros")""") #45881550 Place of birth unknown
 
     # os estabelecimentos de saúde serão cadastrados em location e repetidos como care_site por falta de detalhes no SIM/SINASC. O care_site terá FK do location.
     # A partir desse ponto acontece a inserção em lote dos estabelecimentos de saúde a partir da base CNES
 
-    #retorna o nome do estabelecimento
-    #retorna o concept_id do tipo da unidade do estabelcimento. essa correspondência foi feita no df_cnes_tpunid.
-    # obtém o location_id com o endereço gerado para o respectivo estabelecimento de saúde na tabela location
-#    spark.sql("""insert into care_site(
-#                care_site_id,                              CO_CNES
-#                care_site_name,                            NO_RAZAO_SOCIAL
-#                place_of_service_concept_id,
-#                location_id,                               CO_CNES
-#                care_site_source_value,                    
-#                place_of_service_source_value)
-#    values
-#    (
-#    df_care_site.identity,
-#    df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))), 
-#    df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))), 
-#    (select location_id from location where location_source_value = replace(df_sinasc.codestab,'.')), 
-#    df_sinasc.codestab,
-#    null
-#    )""")
-
-def loadLocationRebios(spark: SparkSession, logger: logging.Logger):
+def loadLocationCnesRebios(spark: SparkSession, logger: logging.Logger):
     #load dos estabelecimentos de saúde CNES. Cada establecimento de saúde é uma location que se repete no care_site visto que não temos dados das divisões/unidades dos estabelecimentos de saúde.
     #"1200452000725";"2000725";"04034526000143";"3";"3";"SECRETARIA DE ESTADO DE SAUDE";"HOSPITAL DR ARY RODRIGUES";"AV SENADOR EDUARDO ASSMAR";"153";"";"COHAB";"69925000";"001";"";"";"";"(68)3232 2956";"";"hospitalaryrodrigues201705@gmail.com";"";"04034526001115";"04";"03";"";"";"";"";"";"05";"06";"12";"120045";"27/03/2024";"SCNES";"63786311234";"";"";"";"";"-10.151";"-67.736";"11/07/2019";"SCNES";"1023";"S";"";"S";"";"";"E";"30/10/2001";"006";"009";"";""
 
     # Tendo como source o CSV tbEstabelecimento999999.csv contendo os estabelecimentos de saúde. Um registro equivalente é adicionado na tabela caresite
     #CREATE TABLE location (
-    #			location_id integer ,                        CO_CNES
+    #			location_id integer ,                        PK_gerada pelo ETL
     #			address_1 varchar(50) NULL,                  NO_LOGRADOURO + NU_ENDERECO + NO_COMPLEMENTO 
     #			address_2 varchar(50) NULL,                  NO_BAIRRO
     #			city varchar(50) NULL,                       CO_MUNICIPIO_GESTOR
     #			state varchar(2) NULL,                       CO_ESTADO_GESTOR
     #			zip varchar(9) NULL,                         CO_CEP
     #			county varchar(20) NULL,
-    #			location_source_value varchar(50) NULL,      CO_UNIDADE
-    #			country_concept_id integer NULL,             4075645L
+    #			location_source_value varchar(50) NULL,      CO_CNES p/ estabelecimento de saúde e CODMUN p/ municípios
+    #			country_concept_id integer NULL,             4075645L  código do Brasil
     #			country_source_value varchar(80) NULL,       'Brasil'
-    #			latitude float NULL,                         NU_LATITUDE
-    #			longitude float NULL );                      NU_LONGITUDE
+    #			latitude float NULL,                         NU_LATITUDE p/ estabelecimento de saúde e latitude do município p/ municípios
+    #			longitude float NULL );                      NU_LONGITUDE p/ estabelecimento de saúde e longitude do município p/ municípios
 
 #"CO_UNIDADE"
 #"CO_CNES"
@@ -335,8 +316,6 @@ def loadLocationRebios(spark: SparkSession, logger: logging.Logger):
     # Foi adotado dentro do projeto que o município de nascimento será o de endereço da mãe (CODMUNRES).
     ################################
 
-    #por ser PK será utilizado o código completo do munícipio com os dígitos do estado do início do código. o último dígito é o código verificador. apenas o código do munícipio gera repetição.
-    #código do Brazil obtido no Athena do vocabulario SNOMED. Vai ser necessário um tratamento para os casos envolvendo estrangeiros. No sinasc o campo CODPAISRES vem com 1 para os brasileiros.
     spark.sql("""insert into location ( 
                 location_id  , 
                 address_1  ,           
@@ -383,38 +362,142 @@ def loadLocationRebios(spark: SparkSession, logger: logging.Logger):
     #por ser PK será utilizado o código completo do munícipio com os dígitos do estado do início do código. o último dígito é o código verificador. apenas o código do munícipio gera repetição.
     #código do Brazil obtido no Athena do vocabulario SNOMED. Vai ser necessário um tratamento para os casos envolvendo estrangeiros. No sinasc o campo CODPAISRES vem com 1 para os brasileiros.
 
-    # retornar o df_cnes.endereco
-    #retornar o df_cnes.codigo_munic
-    #retornar o substr(df_cnes.codigo_munic, 1, 2)
-    #retornar o df_cnes.cep
-    #retornar o df_cnes.latitude
-    #retornar o df_cnes.longitude
+def loadLocationCityRebios(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
+    # Tendo como source o CSV de municípios RELATORIO_DTB_BRASIL_MUNICIPIO.xls. 
+    #CREATE TABLE location (
+    #			location_id integer ,                        PK_gerada pelo ETL
+    #			address_1 varchar(50) NULL,                  NO_LOGRADOURO + NU_ENDERECO + NO_COMPLEMENTO 
+    #			address_2 varchar(50) NULL,                  NO_BAIRRO
+    #			city varchar(50) NULL,                       CO_MUNICIPIO_GESTOR
+    #			state varchar(2) NULL,                       CO_ESTADO_GESTOR
+    #			zip varchar(9) NULL,                         CO_CEP
+    #			county varchar(20) NULL,
+    #			location_source_value varchar(50) NULL,      CO_CNES p/ estabelecimento de saúde e CODMUN p/ municípios
+    #			country_concept_id integer NULL,             4075645L  código do Brasil
+    #			country_source_value varchar(80) NULL,       'Brasil'
+    #			latitude float NULL,                         NU_LATITUDE p/ estabelecimento de saúde e latitude do município p/ municípios
+    #			longitude float NULL );                      NU_LONGITUDE p/ estabelecimento de saúde e longitude do município p/ municípios
 
-    spark.sql("""insert into location (
-                location_id  ,
-                address_1  ,
-                address_2  ,
-                city  ,
-                state ,
-                zip ,
-                county  ,
-                location_source_value  ,
-                country_concept_id  ,
-                country_source_value ,
-                latitude,
-                longitude)
+#Arquivo do IBGE: RELATORIO_DTB_BRASIL_MUNICIPIO.xls
+
+#root
+# |-- UF: long (nullable = true)
+# |-- NOME_UF: string (nullable = true)
+# |-- COD_REG_GEO_INTERNEDIARIA: long (nullable = true)
+# |-- NOME_REG_GEO_INTERNEDIARIA: string (nullable = true)
+# |-- COD_REG_GEO_IMEDIATA: long (nullable = true)
+# |-- NOME_REG_GEO_IMEDIATA: string (nullable = true)
+# |-- COD_MESO_REG_GEO: long (nullable = true)
+# |-- NOME_MESO_REG_GEO: string (nullable = true)
+# |-- COD_MICRO_GEO_REG: long (nullable = true)
+# |-- NOME_MICRO_GEO_REG: string (nullable = true)
+# |-- COD_MUNICIPIO: long (nullable = true)
+# |-- COD_MUNICIPIO_COMPLETO: long (nullable = true)
+# |-- NOME_MUNICIPIO: string (nullable = true)
+
+#>>> spark_df.show()
+#+---+--------+-------------------------+--------------------------+--------------------+---------------------+----------------+-----------------+-----------------+------------------+-------------+----------------------+--------------------+
+#| UF| NOME_UF|COD_REG_GEO_INTERNEDIARIA|NOME_REG_GEO_INTERNEDIARIA|COD_REG_GEO_IMEDIATA|NOME_REG_GEO_IMEDIATA|COD_MESO_REG_GEO|NOME_MESO_REG_GEO|COD_MICRO_GEO_REG|NOME_MICRO_GEO_REG|COD_MUNICIPIO|COD_MUNICIPIO_COMPLETO|      NOME_MUNICIPIO|
+#+---+--------+-------------------------+--------------------------+--------------------+---------------------+----------------+-----------------+-----------------+------------------+-------------+----------------------+--------------------+
+#| 11|Rondônia|                     1102|                 Ji-Paraná|              110005|               Cacoal|               2|Leste Rondoniense|                6|            Cacoal|           15|               1100015|Alta Floresta D'O...|
+#| 11|Rondônia|                     1102|                 Ji-Paraná|              110005|               Cacoal|               2|Leste Rondoniense|                6|            Cacoal|          379|               1100379|Alto Alegre dos P...|
+#| 11|Rondônia|                     1101|               Porto Velho|              110002|            Ariquemes|               2|Leste Rondoniense|                3|         Ariquemes|          403|               1100403|        Alto Paraíso|
+#| 11|Rondônia|                     1102|                 Ji-Paraná|              110004|            Ji-Paraná|               2|Leste Rondoniense|                5|  Alvorada D'Oeste|          346|               1100346|    Alvorada D'Oeste|
+#| 11|Rondônia|                     1101|               Porto Velho|              110002|            Ariquemes|               2|Leste Rondoniense|                3|         Ariquemes|           23|               1100023|           Ariquemes|
+
+    # Estrutura SINASC até 2019
+    ################################
+    # inserção do location de cada município de entrada como sendo o endereço da person. 
+    # Linhas de location adicionais serão criadas para conter os demais municípios de entrada, como CODMUNCART, CODMUNNASC, CODMUNNATU, considerando todas as colunas de município.
+    # Foi adotado dentro do projeto que o município de nascimento será o de endereço da mãe (CODMUNRES).
+    ################################
+
+    logger.info("Loading of list of cities on table LOCATION started.")
+    df_load_schema = StructType([ \
+    StructField("location_id", LongType(), False), \
+    StructField("city", StringType(), True), \
+    StructField("state", StringType(), True), \
+    StructField("county", StringType(), True), \
+    StructField("location_source_value", StringType(), True) \
+    StructField("country_concept_id", StringType(), True), \
+    StructField("country_source_value", StringType(), True), \
+    StructField("latitude", FloatType(), True), \
+    StructField("longitude", FloatType(), True) \
+   ])
+
+    df_source = pd.read_excel(os.path.join(file_path, file_name))
+    df_input = spark.createDataFrame(df_source)
+    df_location = spark.createDataFrame(df_input.select(\
+                        FSql.lit(0).cast(LongType()).alias('location_id') \
+                        df_input.NOME_MUNICIPIO.alias('city'), \
+                        df_input.NOME_UF.alias('state'), \
+                        df_input.UF.cast(StringType()).alias('county'), \
+                        df_input.COD_MUNICIPIO_COMPLETO.alias('location_source_value'), \
+                        FSql.lit(4075645).cast(LongType()).alias('country_concept_id'), \
+                        FSql.lit('Brasil').alias('country_source_value'), \
+                        FSql.lit(0).cast(LongType()).alias('latitude'), \
+                        FSql.lit(0).cast(LongType()).alias('longitude')).rdd \
+                        df_load_schema)
+    
+    if df_location.count() > 0:
+        #obtem o max da tabela para usar na inserção de novos registros
+        count_max_location_df = spark.sql("SELECT greatest(max(location_id),0) + 1 AS max_location FROM bios.location")
+        count_max_location = count_max_location_df.first().max_location
+        #geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+        # a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+        # do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+        df_location = df_location.withColumn("location_id", monotonically_increasing_id())
+        #sincroniza os id's gerados com o max(person_id) existente no banco de dados
+        df_location = df_location.withColumn("location_id", df_location["location_id"] + count_max_location)
+        # persistindo os dados de observation_period no banco.
+        df_location.writeTo("bios.location").append()
+
+
+
+
+    spark.sql("""insert into location ( 
+                location_id  , 
+                address_1  ,           
+                address_2  ,          
+                city  ,                
+                state ,               
+                zip ,                 
+                county  ,             
+                location_source_value  ,  
+                country_concept_id  ,     
+                country_source_value ,    
+                latitude,                 
+                longitude )
     values(
     df_location.identity,  
-    df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))), 
     null,
-    df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))), 
-    df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))), 
-    df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))), 
     null,
-    replace(df_sinasc.codestab,'.'),
+    df_municipios.where(sqlLib.col('codigo').rlike('|'.join(df_sinasc.codmunres))),
+    df_estados.where(sqlLib.col('codigo').rlike('|'.join(substr(df_sinasc.codmunres, 1, 2)))),
+    null,
+    null,
+    df_sinasc.codmunres,
     4075645,    
     df_sinasc.codpaisres,
-    df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))), 
-    df_cnes.where(sqlLib.col('codigo_cnes').rlike('|'.join(replace(df_sinasc.codestab,'.')))) 
+    null,
+    null
     )""")
+
+    cnes = [
+    (1200452000725,2000725,'HOSPITAL DR ARY RODRIGUES', 'HOSPITAL GERAL', 05, 120045, 'AV SENADOR EDUARDO ASSMAR, 153 COHAB', 69925000, -10.151, -67.736, null)  #retorna o conceptid do tipo da unidade do CNES
+    ]
+    cnes_cols = ["codigo_unidade","codigo_cnes","nome","nome_tipo","tpunid","codigo_munic","endereco","cep","latitude","longitude","tipo_unid_concept_id"]
+    df_cnes = spark.createDataFrame(data=cnes, schema = cnes_cols)
+
+    ################################
+    # antes da inserção do estabelecimento, atualiza o df_cnes com o concept_id do código do tipo da unidade a partir do df_cnes_tpunid
+    ################################
+    df_cnes = (df_cnes.join(df_cnes_tpunid, on=['df_cnes.tpunid == df_cnes_tpunid.codigo'])) # retorna o conceptid do tipo da unidade 
+
+    ################################
+    # inserção do location de cada estabelecimento de saúde
+    # esse registro é duplicado na tabela care_site por falta de informação no SIM/SINASC
+    ################################
+    #por ser PK será utilizado o código completo do munícipio com os dígitos do estado do início do código. o último dígito é o código verificador. apenas o código do munícipio gera repetição.
+    #código do Brazil obtido no Athena do vocabulario SNOMED. Vai ser necessário um tratamento para os casos envolvendo estrangeiros. No sinasc o campo CODPAISRES vem com 1 para os brasileiros.
 
