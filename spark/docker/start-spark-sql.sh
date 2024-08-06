@@ -27,7 +27,13 @@ spark-sql --packages $DEPENDENCIES \
     --conf spark.eventLog.enabled=true \
     --conf spark.eventLog.dir=/workspace/spark-events \
     --conf spark.history.fs.logDirectory= /workspace/spark-events \
-    --conf spark.sql.catalogImplementation=in-memory
+    --conf spark.sql.catalogImplementation=in-memory \
+    --conf spark.executor.memory=8g \
+    --conf spark.driver.memory=8g \
+    --conf spark.memory.offHeap.enabled=true \
+    --conf spark.memory.offHeap.size=16g \
+    --conf spark.driver.extraJavaOptions=-Xmx8g \
+    --conf spark.driver.extraJavaOptions=-Xms8g
 
 #   CREATE TABLE bios.table_01 (
 #          id bigint,
