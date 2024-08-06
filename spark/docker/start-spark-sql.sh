@@ -27,7 +27,8 @@ spark-sql --packages $DEPENDENCIES \
     --conf spark.eventLog.enabled=true \
     --conf spark.eventLog.dir=/workspace/spark-events \
     --conf spark.history.fs.logDirectory= /workspace/spark-events \
-    --conf spark.sql.catalogImplementation=in-memory
+    --conf spark.sql.catalogImplementation=in-memory \
+    --conf spark.executor.memory=6g
 
 #   CREATE TABLE bios.table_01 (
 #          id bigint,
