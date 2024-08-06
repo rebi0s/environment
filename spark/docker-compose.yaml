@@ -15,6 +15,7 @@ services:
             - ../../spark/master/data:/opt/spark-data
             - ../../spark/master/logs:/opt/spark/logs
             - ../../spark/master/spark-events:/workspace/spark-events
+            - ../../spark/etl-rebios:/home/etl-rebios
         environment:
             - SPARK_LOCAL_IP=spark-master
             - SPARK_WORKLOAD=master
@@ -47,7 +48,6 @@ services:
             - ../../spark/spark-worker-a/data:/opt/spark-data
             - ../../spark/spark-worker-a/logs:/opt/spark/logs
             - ../../spark/spark-worker-a/spark-events:/workspace/spark-events
-            - ../../spark/etl-rebios:/home/etl-rebios
     spark-worker-b:
         container_name: spark_worker_b
         build:
