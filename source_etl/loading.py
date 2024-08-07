@@ -31,6 +31,7 @@ from datetime import datetime
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DateType, TimestampType, LongType
 from pyspark.sql.functions import monotonically_increasing_id
 from pyspark.sql import functions as FSql
+from pyspark.sql import DataFrame
 from utils import *
 from utils_vocab_omop import *
 from utils_datasus import *
@@ -109,22 +110,22 @@ if sys.argv[1] == 'VOCAB_OMOP':
 
 if sys.argv[1] == 'DATASUS':
 	try:
-		if num_args == 4:
-			logger.error("Check the command line usage. For DATASUS profile 2 parameters are required.")
+		if num_args == 5:
+			logger.error("Check the command line usage. For DATASUS the options are as below.")
 			logger.error("Usage: ")
-			logger.error("   submit-spark loading.py DATASUS -city /path_to_folder_with_cities")
-			logger.error("   submit-spark loading.py DATASUS -care /path_to_folder_with_care_sites")
+			logger.error("   submit-spark loading.py DATASUS -city /path_to_folder_with_cities file_name_with_cities")
+			logger.error("   submit-spark loading.py DATASUS -care /path_to_folder_with_care_sites file_name_with_care_sites")
 			logger.error("   submit-spark loading.py DATASUS -idc10 /path_to_folder_with_icd10")
 			sys.exit(-1)
 
 		logger.info("Loading external data from DATASUS to OMOP database.")
 		if sys.argv[2] == "-city":
 			#loadStates(spark, logger, sys.argv[3])
-			loadCities(spark, logger, sys.argv[3])
+			loadLocationCityRebios(sys.argv[3], sys.argv[4], spark, logger)
 		if sys.argv[2] == "-care":
-			loadLocationRebios(spark, logger, sys.argv[3])
-			loadTypeOfUnit(spark, logger, sys.argv[3])
-			loadCareSiteRebios(spark, logger, sys.argv[3])
+			df_location_cnes = loadLocationCnesRebios(sys.argv[3], sys.argv[4], spark, logger)
+			#loadTypeOfUnit(spark, logger, sys.argv[3])
+			loadCareSiteRebios(sys.argv[3], sys.argv[4], df_location_cnes, spark, logger)
 			loadProviderRebios(spark, logger, sys.argv[3])
 		if sys.argv[2] == "-idc10":
 			loadIdc10(spark, logger, sys.argv[3])
