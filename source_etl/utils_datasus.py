@@ -218,6 +218,21 @@ def loadCareSiteRebios(file_path: str, file_name: str, df_location_cnes: DataFra
 #"ST_CONTRATO_FORMALIZADO"
 #"CO_TIPO_ABRANGENCIA"
 
+    # Essa é a config para o registro na location do endereço de um care_site do cnes
+    #CREATE TABLE location (
+    #			location_id integer ,                        PK_gerada pelo ETL # por ser o endereço de um hospital, essa PK será usada como fk no care_site
+    #			address_1 varchar(50) NULL,                  NO_LOGRADOURO + NU_ENDERECO + NO_COMPLEMENTO 
+    #			address_2 varchar(50) NULL,                  NO_BAIRRO
+    #			city varchar(50) NULL,                       CO_MUNICIPIO_GESTOR   # se necessário, com essa coluna faz join para obter os dados do município desse endereço usando a coluna location.location_source_value de um município.
+    #			state varchar(2) NULL,                       adotar nesse campo a sigla da UF para simplificar a busca
+    #			zip varchar(9) NULL,                         CO_CEP
+    #			county varchar(20) NULL,
+    #			location_source_value varchar(50) NULL,      CO_CNES # essa coluna é para permitir buscar a PK do location de um hospital ao armazenar ele na tabela care_site
+    #			country_concept_id integer NULL,             4075645L  código do Brasil
+    #			country_source_value varchar(80) NULL,       'Brasil'
+    #			latitude float NULL,                         NU_LATITUDE p/ estabelecimento de saúde 
+    #			longitude float NULL );                      NU_LONGITUDE p/ estabelecimento de saúde 
+
     #CREATE TABLE care_site (
     #			care_site_id integer ,                                 PK gerada pelo ETL
     #			care_site_name varchar(255) NULL,                      NO_RAZAO_SOCIAL
@@ -225,6 +240,8 @@ def loadCareSiteRebios(file_path: str, file_name: str, df_location_cnes: DataFra
     #			location_id integer NULL,                              PK da location
     #			care_site_source_value varchar(50) NULL,               CO_CNES
     #			place_of_service_source_value varchar(50) NULL );
+
+    logger.info("Loading of list of care site records on table CARE_SITE started.")
 
     #esses dois estabelecimentos são valores pré-definidos próprios do Climaterna
     #não existe registro em location correspondente
@@ -235,82 +252,131 @@ def loadCareSiteRebios(file_path: str, file_name: str, df_location_cnes: DataFra
 
     # os estabelecimentos de saúde serão cadastrados em location e repetidos como care_site por falta de detalhes no SIM/SINASC. O care_site terá FK do location.
     # A partir desse ponto acontece a inserção em lote dos estabelecimentos de saúde a partir da base CNES
-    # Precisa fazer o join com o dataframe de entrada para obter a PK da tabela location e usar como FK no care_site
+    # o dataframe de entrada contém os dados do arquivo de cnes e os dados inseridos na tabela location
+
+    df_load_schema = StructType([ \
+    StructField("care_site_id", LongType(), False), \
+    StructField("care_site_name", StringType(), True), \
+    StructField("place_of_service_concept_id", LongType(), True), \
+    StructField("location_id", LongType(), True), \
+    StructField("care_site_source_value", StringType(), True), \
+    StructField("place_of_service_source_value", StringType(), True) \
+   ])
+    
+    if df_location_cnes.count() > 0:
+        df_care_site = spark.createDataFrame(df_location_cnes.select( \
+        FSql.lit(0).cast(LongType()).alias('care_site_id'), \
+        df_location_cnes.NO_RAZAO_SOCIAL.alias('care_site_name'), \
+   		FSql.lit(None).cast(StringType()).alias('place_of_service_concept_id'), \
+        df_location_cnes.location_id.alias('location_id'), \
+        df_location_cnes.CO_CNES.alias('care_site_source_value'), \
+   		FSql.lit(None).cast(StringType()).alias('place_of_service_source_value') \
+        ).rdd, df_load_schema)
+        
+        if df_care_site.count() > 0:
+            #obtem o max da tabela para usar na inserção de novos registros
+            count_max_care_site_df = spark.sql("SELECT greatest(max(care_site_id),0) + 1 AS max_care_site FROM bios.care_site")
+            count_max_care_site = count_max_care_site_df.first().max_care_site
+            #geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+            # a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+            # do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+            df_care_site = df_care_site.withColumn("care_site_id", monotonically_increasing_id())
+            #sincroniza os id's gerados com o max(person_id) existente no banco de dados
+            df_care_site = df_care_site.withColumn("care_site_id", df_care_site["care_site_id"] + count_max_care_site)
+
+            # the show command below is to force the dataframe to be checked against its structure field. The error trap is outside this routine.
+            df_care_site.show()   
+            df_care_site.writeTo("bios.care_site").append()
+            logger.info("Care sites data succesfully written to table CARE_SITE")
 
 def loadLocationCnesRebios(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
     #load dos estabelecimentos de saúde CNES. Cada establecimento de saúde é uma location que se repete no care_site visto que não temos dados das divisões/unidades dos estabelecimentos de saúde.
     #"1200452000725";"2000725";"04034526000143";"3";"3";"SECRETARIA DE ESTADO DE SAUDE";"HOSPITAL DR ARY RODRIGUES";"AV SENADOR EDUARDO ASSMAR";"153";"";"COHAB";"69925000";"001";"";"";"";"(68)3232 2956";"";"hospitalaryrodrigues201705@gmail.com";"";"04034526001115";"04";"03";"";"";"";"";"";"05";"06";"12";"120045";"27/03/2024";"SCNES";"63786311234";"";"";"";"";"-10.151";"-67.736";"11/07/2019";"SCNES";"1023";"S";"";"S";"";"";"E";"30/10/2001";"006";"009";"";""
 
     # Tendo como source o CSV tbEstabelecimento999999.csv contendo os estabelecimentos de saúde. Um registro equivalente será adicionado na tabela caresite na rotina seguinte
+    # Essa é a config para o registro na location do endereço de um care_site do cnes
     #CREATE TABLE location (
-    #			location_id integer ,                        PK_gerada pelo ETL
+    #			location_id integer ,                        PK_gerada pelo ETL # por ser o endereço de um hospital, essa PK será usada como fk no care_site
     #			address_1 varchar(50) NULL,                  NO_LOGRADOURO + NU_ENDERECO + NO_COMPLEMENTO 
     #			address_2 varchar(50) NULL,                  NO_BAIRRO
-    #			city varchar(50) NULL,                       CO_MUNICIPIO_GESTOR
-    #			state varchar(2) NULL,                       CO_ESTADO_GESTOR
+    #			city varchar(50) NULL,                       CO_MUNICIPIO_GESTOR   # se necessário, com essa coluna faz join para obter os dados do município desse endereço usando a coluna location.location_source_value de um município.
+    #			state varchar(2) NULL,                       adotar nesse campo a sigla da UF para simplificar a busca
     #			zip varchar(9) NULL,                         CO_CEP
     #			county varchar(20) NULL,
-    #			location_source_value varchar(50) NULL,      CO_CNES p/ estabelecimento de saúde 
+    #			location_source_value varchar(50) NULL,      CO_CNES # essa coluna é para permitir buscar a PK do location de um hospital ao armazenar ele na tabela care_site
     #			country_concept_id integer NULL,             4075645L  código do Brasil
     #			country_source_value varchar(80) NULL,       'Brasil'
     #			latitude float NULL,                         NU_LATITUDE p/ estabelecimento de saúde 
     #			longitude float NULL );                      NU_LONGITUDE p/ estabelecimento de saúde 
 
-#"CO_UNIDADE"
-#"CO_CNES"
-#"NU_CNPJ_MANTENEDORA"
-#"TP_PFPJ"
-#"NIVEL_DEP"
-#"NO_RAZAO_SOCIAL"
-#"NO_FANTASIA"
-#"NO_LOGRADOURO"
-#"NU_ENDERECO"
-#"NO_COMPLEMENTO"
-#"NO_BAIRRO"
-#"CO_CEP"
-#"CO_REGIAO_SAUDE"
-#"CO_MICRO_REGIAO"
-#"CO_DISTRITO_SANITARIO"
-#"CO_DISTRITO_ADMINISTRATIVO"
-#"NU_TELEFONE"
-#"NU_FAX"
-#"NO_EMAIL"
-#"NU_CPF"
-#"NU_CNPJ"
-#"CO_ATIVIDADE"
-#"CO_CLIENTELA"
-#"NU_ALVARA"
-#"DT_EXPEDICAO"
-#"TP_ORGAO_EXPEDIDOR"
-#"DT_VAL_LIC_SANI"
-#"TP_LIC_SANI"
-#"TP_UNIDADE"
-#"CO_TURNO_ATENDIMENTO"
-#"CO_ESTADO_GESTOR"
-#"CO_MUNICIPIO_GESTOR"
-#"TO_CHAR(DT_ATUALIZACAO,'DD/MM/YYYY')"
-#"CO_USUARIO"
-#"CO_CPFDIRETORCLN"
-#"REG_DIRETORCLN"
-#"ST_ADESAO_FILANTROP"
-#"CO_MOTIVO_DESAB"
-#"NO_URL"
-#"NU_LATITUDE"
-#"NU_LONGITUDE"
-#"TO_CHAR(DT_ATU_GEO,'DD/MM/YYYY')"
-#"NO_USUARIO_GEO"
-#"CO_NATUREZA_JUR"
-#"TP_ESTAB_SEMPRE_ABERTO"
-#"ST_GERACREDITO_GERENTE_SGIF"
-#"ST_CONEXAO_INTERNET"
-#"CO_TIPO_UNIDADE"
-#"NO_FANTASIA_ABREV"
-#"TP_GESTAO"
-#"TO_CHAR(DT_ATUALIZACAO_ORIGEM,'DD/MM/YYYY')"
-#"CO_TIPO_ESTABELECIMENTO"
-#"CO_ATIVIDADE_PRINCIPAL"
-#"ST_CONTRATO_FORMALIZADO"
-#"CO_TIPO_ABRANGENCIA"
+
+    # Essa é a config para o registro na location de um município.
+    #CREATE TABLE location (
+    #			location_id integer ,                        PK_gerada pelo ETL
+    #			city varchar(50) NULL,                       NOME_MUNICIPIO
+    #			state varchar(2) NULL,                       nome_uf
+    #			county varchar(20) NULL,                     codigo_uf
+    #			location_source_value varchar(50) NULL,      GEOCODIGO_MUNICIPIO
+    #			country_concept_id integer NULL,             4075645L  código do Brasil
+    #			country_source_value varchar(80) NULL,       'Brasil'
+    #			latitude float NULL,                         latitude do município p/ municípios
+    #			longitude float NULL );                      longitude do município p/ municípios
+
+    #"CO_UNIDADE"
+    #"CO_CNES"
+    #"NU_CNPJ_MANTENEDORA"
+    #"TP_PFPJ"
+    #"NIVEL_DEP"
+    #"NO_RAZAO_SOCIAL"
+    #"NO_FANTASIA"
+    #"NO_LOGRADOURO"
+    #"NU_ENDERECO"
+    #"NO_COMPLEMENTO"
+    #"NO_BAIRRO"
+    #"CO_CEP"
+    #"CO_REGIAO_SAUDE"
+    #"CO_MICRO_REGIAO"
+    #"CO_DISTRITO_SANITARIO"
+    #"CO_DISTRITO_ADMINISTRATIVO"
+    #"NU_TELEFONE"
+    #"NU_FAX"
+    #"NO_EMAIL"
+    #"NU_CPF"
+    #"NU_CNPJ"
+    #"CO_ATIVIDADE"
+    #"CO_CLIENTELA"
+    #"NU_ALVARA"
+    #"DT_EXPEDICAO"
+    #"TP_ORGAO_EXPEDIDOR"
+    #"DT_VAL_LIC_SANI"
+    #"TP_LIC_SANI"
+    #"TP_UNIDADE"
+    #"CO_TURNO_ATENDIMENTO"
+    #"CO_ESTADO_GESTOR"
+    #"CO_MUNICIPIO_GESTOR"
+    #"TO_CHAR(DT_ATUALIZACAO,'DD/MM/YYYY')"
+    #"CO_USUARIO"
+    #"CO_CPFDIRETORCLN"
+    #"REG_DIRETORCLN"
+    #"ST_ADESAO_FILANTROP"
+    #"CO_MOTIVO_DESAB"
+    #"NO_URL"
+    #"NU_LATITUDE"
+    #"NU_LONGITUDE"
+    #"TO_CHAR(DT_ATU_GEO,'DD/MM/YYYY')"
+    #"NO_USUARIO_GEO"
+    #"CO_NATUREZA_JUR"
+    #"TP_ESTAB_SEMPRE_ABERTO"
+    #"ST_GERACREDITO_GERENTE_SGIF"
+    #"ST_CONEXAO_INTERNET"
+    #"CO_TIPO_UNIDADE"
+    #"NO_FANTASIA_ABREV"
+    #"TP_GESTAO"
+    #"TO_CHAR(DT_ATUALIZACAO_ORIGEM,'DD/MM/YYYY')"
+    #"CO_TIPO_ESTABELECIMENTO"
+    #"CO_ATIVIDADE_PRINCIPAL"
+    #"ST_CONTRATO_FORMALIZADO"
+    #"CO_TIPO_ABRANGENCIA"
 
     # Estrutura SINASC até 2019
     ################################
@@ -319,7 +385,8 @@ def loadLocationCnesRebios(file_path: str, file_name: str, spark: SparkSession, 
     # Foi adotado dentro do projeto que o município de nascimento será o de endereço da mãe (CODMUNRES).
     ################################
 
-    logger.info("Loading of list of health locations on table LOCATION started.")
+    logger.info("Loading of list of care site locations on table LOCATION started.")
+
     df_load_schema = StructType([ \
     StructField("location_id", LongType(), False), \
     StructField("address_1", StringType(), True), \
@@ -333,19 +400,24 @@ def loadLocationCnesRebios(file_path: str, file_name: str, spark: SparkSession, 
     StructField("latitude", FloatType(), True), \
     StructField("longitude", FloatType(), True) \
    ])
+    
+    # essa inicialização é para garantir algum retorno ao término da rotina
+    df_location = spark.createDataFrame([], df_load_schema)
 
-    df_load = spark.read.csv(os.path.join(file_path, file_name), sep=";", header=True, schema=df_load_schema)
+    df_load = spark.read.csv(os.path.join(file_path, file_name), sep=";", header=True, inferSchema=True)
     if df_load.count() > 0:
         df_location = spark.createDataFrame(df_load.select( \
         FSql.lit(0).cast(LongType()).alias('location_id'), \
-        df_load.NOME_MUNICIPIO.alias('city'), \
-        df_load.NOME_UF.alias('state'), \
-        df_load.UF.cast(StringType()).alias('county'), \
-        df_load.COD_MUNICIPIO_COMPLETO.alias('location_source_value'), \
+        FSql.concat(df_load.NO_LOGRADOURO, FSql.lit(" "), df_load.NU_ENDERECO, FSql.lit(" "), df_load.NO_COMPLEMENTO).alias('address_1'), \
+        df_load.NO_BAIRRO.alias('address_2'), \
+        df_load.CO_MUNICIPIO_GESTOR.alias('city'), \
+        df_load.CO_ESTADO_GESTOR.alias('state'), \
+        df_load.CO_CEP.alias('zip'), \
+        df_load.CO_CNES.alias('location_source_value'), \
         FSql.lit(4075645).cast(LongType()).alias('country_concept_id'), \
         FSql.lit('Brasil').alias('country_source_value'), \
-        FSql.lit(0).cast(LongType()).alias('latitude'), \
-        FSql.lit(0).cast(LongType()).alias('longitude') \
+        df_load.NU_LATITUDE.cast(LongType()).alias('latitude'), \
+        df_load.NU_LONGITUDE.cast(LongType()).alias('latitude'), \
         ).rdd, df_load_schema)
         
         if df_location.count() > 0:
@@ -362,65 +434,20 @@ def loadLocationCnesRebios(file_path: str, file_name: str, spark: SparkSession, 
             # the show command below is to force the dataframe to be checked against its structure field. The error trap is outside this routine.
             df_location.show()   
             df_location.writeTo("bios.location").append()
+            # a junção dos dois df é para ser usado na rotina que insere o care_site.
+            # o df vai completo com a PK do location para ser usada como fk no care_site.
+            df_location = (df_location.join(df_load, on=['df_location.location_source_value == df_load.CO_CNES'], how='inner'))
             logger.info("Cities data succesully written to table LOCATION")
-
-    return df_location_cnes
-
-    spark.sql("""insert into location ( 
-                location_id  , 
-                address_1  ,           
-                address_2  ,          
-                city  ,                
-                state ,               
-                zip ,                 
-                county  ,             
-                location_source_value  ,  
-                country_concept_id  ,     
-                country_source_value ,    
-                latitude,                 
-                longitude )
-    values(
-    df_location.identity,  
-    null,
-    null,
-    df_municipios.where(sqlLib.col('codigo').rlike('|'.join(df_sinasc.codmunres))),
-    df_estados.where(sqlLib.col('codigo').rlike('|'.join(substr(df_sinasc.codmunres, 1, 2)))),
-    null,
-    null,
-    df_sinasc.codmunres,
-    4075645,    
-    df_sinasc.codpaisres,
-    null,
-    null
-    )""")
-
-    cnes = [
-    (1200452000725,2000725,'HOSPITAL DR ARY RODRIGUES', 'HOSPITAL GERAL', 05, 120045, 'AV SENADOR EDUARDO ASSMAR, 153 COHAB', 69925000, -10.151, -67.736, null)  #retorna o conceptid do tipo da unidade do CNES
-    ]
-    cnes_cols = ["codigo_unidade","codigo_cnes","nome","nome_tipo","tpunid","codigo_munic","endereco","cep","latitude","longitude","tipo_unid_concept_id"]
-    df_cnes = spark.createDataFrame(data=cnes, schema = cnes_cols)
-
-
-    ################################
-    # antes da inserção do estabelecimento, atualiza o df_cnes com o concept_id do código do tipo da unidade a partir do df_cnes_tpunid
-    ################################
-    df_cnes = (df_cnes.join(df_cnes_tpunid, on=['df_cnes.tpunid == df_cnes_tpunid.codigo'])) # retorna o conceptid do tipo da unidade 
-
-    ################################
-    # inserção do location de cada estabelecimento de saúde
-    # esse registro é duplicado na tabela care_site por falta de informação no SIM/SINASC
-    ################################
-    #por ser PK será utilizado o código completo do munícipio com os dígitos do estado do início do código. o último dígito é o código verificador. apenas o código do munícipio gera repetição.
-    #código do Brazil obtido no Athena do vocabulario SNOMED. Vai ser necessário um tratamento para os casos envolvendo estrangeiros. No sinasc o campo CODPAISRES vem com 1 para os brasileiros.
+    return df_location
 
 def loadLocationCityRebios(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
     # Tendo como source o CSV de municípios RELATORIO_DTB_BRASIL_MUNICIPIO.xls. 
     #CREATE TABLE location (
     #			location_id integer ,                        PK_gerada pelo ETL
-    #			city varchar(50) NULL,                       CO_MUNICIPIO_GESTOR
-    #			state varchar(2) NULL,                       CO_ESTADO_GESTOR
-    #			county varchar(20) NULL,
-    #			location_source_value varchar(50) NULL,      CODMUN p/ municípios
+    #			city varchar(50) NULL,                       NOME_MUNICIPIO
+    #			state varchar(2) NULL,                       nome_uf
+    #			county varchar(20) NULL,                     codigo_uf
+    #			location_source_value varchar(50) NULL,      GEOCODIGO_MUNICIPIO
     #			country_concept_id integer NULL,             4075645L  código do Brasil
     #			country_source_value varchar(80) NULL,       'Brasil'
     #			latitude float NULL,                         latitude do município p/ municípios
@@ -457,7 +484,7 @@ def loadLocationCityRebios(file_path: str, file_name: str, spark: SparkSession, 
 #    df_source = pd.read_excel(os.path.join(file_path, file_name))
 #    df_input = spark.createDataFrame(df_source)
 
-    df_load = spark.read.csv(os.path.join(file_path, file_name), sep=";", header=True, schema=df_load_schema)
+    df_load = spark.read.csv(os.path.join(file_path, file_name), sep=";", header=True, inferSchema=True)
 
     df_load = df_load.withColumn("COD_UF", FSql.substring("GEOCODIGO_MUNICIPIO", 1, 2))
 
@@ -491,4 +518,5 @@ def loadLocationCityRebios(file_path: str, file_name: str, spark: SparkSession, 
             df_location.show()   
             df_location.writeTo("bios.location").append()
             logger.info("Cities data succesully written to table LOCATION")
+            df_location.unpersist()
 

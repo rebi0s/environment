@@ -124,9 +124,13 @@ if sys.argv[1] == 'DATASUS':
 			loadLocationCityRebios(sys.argv[3], sys.argv[4], spark, logger)
 		if sys.argv[2] == "-care":
 			df_location_cnes = loadLocationCnesRebios(sys.argv[3], sys.argv[4], spark, logger)
-			#loadTypeOfUnit(spark, logger, sys.argv[3])
-			loadCareSiteRebios(sys.argv[3], sys.argv[4], df_location_cnes, spark, logger)
-			loadProviderRebios(spark, logger, sys.argv[3])
+			if df_location_cnes.count() > 0:
+				#loadTypeOfUnit(spark, logger, sys.argv[3])
+				loadCareSiteRebios(sys.argv[3], sys.argv[4], df_location_cnes, spark, logger)
+				loadProviderRebios(spark, logger, sys.argv[3])
+			if df_location_cnes.count() == 0:
+				logger.info("External data from DATASUS was not loaded to OMOP database.")
+				sys.exit(-1)
 		if sys.argv[2] == "-idc10":
 			loadIdc10(spark, logger, sys.argv[3])
 
