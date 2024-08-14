@@ -475,10 +475,13 @@ def loadLocationCityRebios(file_path: str, file_name: str, spark: SparkSession, 
     StructField("state", StringType(), True), \
     StructField("county", StringType(), True), \
     StructField("location_source_value", StringType(), True), \
-    StructField("country_concept_id", StringType(), True), \
+    StructField("country_concept_id", LongType(), True), \
     StructField("country_source_value", StringType(), True), \
     StructField("latitude", FloatType(), True), \
-    StructField("longitude", FloatType(), True) \
+    StructField("longitude", FloatType(), True), \
+    StructField("address_1", StringType(), True), \
+    StructField("address_2", StringType(), True), \
+    StructField("zip", StringType(), True) \
    ])
 
 #    df_source = pd.read_excel(os.path.join(file_path, file_name))
@@ -488,7 +491,7 @@ def loadLocationCityRebios(file_path: str, file_name: str, spark: SparkSession, 
 
     df_load = df_load.withColumn("COD_UF", FSql.substring("GEOCODIGO_MUNICIPIO", 1, 2))
 
-    df_load = (df_load.join(df_states, on=['df_load.COD_UF == df_states.codigo'], how='inner'))
+    df_load = (df_load.join(df_states, [df_load.COD_UF == df_states.codigo_uf], 'inner'))
 
     if df_load.count() > 0:
         df_location = spark.createDataFrame(df_load.select(\
@@ -499,8 +502,12 @@ def loadLocationCityRebios(file_path: str, file_name: str, spark: SparkSession, 
                             df_load.GEOCODIGO_MUNICIPIO.alias('location_source_value'), \
                             FSql.lit(4075645).cast(LongType()).alias('country_concept_id'), \
                             FSql.lit('Brasil').alias('country_source_value'), \
-                            df_load.LATITUDE.cast(LongType()).alias('latitude'), \
-                            df_load.LONGITUDE.cast(LongType()).alias('longitude')).rdd, \
+                            df_load.LATITUDE.cast(FloatType()).alias('latitude'), \
+                            df_load.LONGITUDE.cast(FloatType()).alias('longitude'), \
+                            FSql.lit(None).cast(StringType()).alias('address_1'), \
+                            FSql.lit(None).cast(StringType()).alias('address_2'), \
+                            FSql.lit(None).cast(StringType()).alias('zip') \
+                            ).rdd, \
                             df_load_schema)
         
         if df_location.count() > 0:

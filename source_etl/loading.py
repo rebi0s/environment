@@ -50,6 +50,10 @@ logger.info('Spark session started.')
 #get the number of input parameters
 num_args = len(sys.argv)
 
+if num_args == 1:
+	logger.error("Check the command line usage. A profile with parameters has to be provided. The available choices are: INIT, VOCAB_OMOP, DATASUS, VOCAB_CTRNA, ETL.")
+	sys.exit(-1)
+
 profiles = ['INIT','VOCAB_OMOP','DATASUS','VOCAB_CTRNA', 'ETL']
 
 if sys.argv[1] not in profiles:
@@ -110,7 +114,7 @@ if sys.argv[1] == 'VOCAB_OMOP':
 
 if sys.argv[1] == 'DATASUS':
 	try:
-		if num_args == 5:
+		if num_args != 5:
 			logger.error("Check the command line usage. For DATASUS the options are as below.")
 			logger.error("Usage: ")
 			logger.error("   submit-spark loading.py DATASUS -city /path_to_folder_with_cities file_name_with_cities")
@@ -120,8 +124,8 @@ if sys.argv[1] == 'DATASUS':
 
 		logger.info("Loading external data from DATASUS to OMOP database.")
 		if sys.argv[2] == "-city":
-			#loadStates(spark, logger, sys.argv[3])
-			loadLocationCityRebios(sys.argv[3], sys.argv[4], spark, logger)
+		    #loadStates(spark, logger, sys.argv[3])
+		    loadLocationCityRebios(sys.argv[3], sys.argv[4], spark, logger)
 		if sys.argv[2] == "-care":
 			df_location_cnes = loadLocationCnesRebios(sys.argv[3], sys.argv[4], spark, logger)
 			if df_location_cnes.count() > 0:

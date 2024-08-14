@@ -195,7 +195,7 @@ def loadOMOPVocabulary(file_path: str, file_name: str, spark: SparkSession, logg
     StructField("vocabulary_name", StringType(), False), \
     StructField("vocabulary_reference", StringType(), True), \
     StructField("vocabulary_version", StringType(), True), \
-    StructField("vocabulary_concept_id", LongType(), False) \ 
+    StructField("vocabulary_concept_id", LongType(), False) \
     ])
 
     df_load = spark.read.csv(os.path.join(file_path, file_name), sep="\t", header=True, schema=df_load_schema)
@@ -206,7 +206,8 @@ def loadOMOPVocabulary(file_path: str, file_name: str, spark: SparkSession, logg
         StructField("vocabulary_name", StringType(), False), \
         StructField("vocabulary_reference", StringType(), True), \
         StructField("vocabulary_version", StringType(), True), \
-        StructField("vocabulary_concept_id", LongType(), False) \ 
+        StructField("vocabulary_concept_id", LongType(), False) \
+        
         ])
 
         df_iceberg=spark.createDataFrame(df_load.select(\
