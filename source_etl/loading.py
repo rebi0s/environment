@@ -131,7 +131,7 @@ if sys.argv[1] == 'DATASUS':
 			if df_location_cnes.count() > 0:
 				#loadTypeOfUnit(spark, logger, sys.argv[3])
 				loadCareSiteRebios(sys.argv[3], sys.argv[4], df_location_cnes, spark, logger)
-				loadProviderRebios(spark, logger, sys.argv[3])
+				loadProviderRebios(spark, logger)
 			if df_location_cnes.count() == 0:
 				logger.info("External data from DATASUS was not loaded to OMOP database.")
 				sys.exit(-1)

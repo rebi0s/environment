@@ -137,16 +137,11 @@ def loadProviderRebios(spark: SparkSession, logger: logging.Logger):
     # # TPNASCASSI	Nascimento foi assistido por? Valores: 1– Médico; 2– Enfermeira/obstetriz; 3– Parteira; 4– Outros; 9– Ignorado
 
     try:
-        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)
-        values (1L, 4206451L, 'Médico', 1L)""")
-        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)
-        values (2L, 32581L, 'Enfermeira/obstetriz', 2L)""")
-        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)
-        values (3L, 40561317L, 'Parteira', 3L)""")
-        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)
-        values (4L, 3245354L, 'Outros', 4L)""")
-        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)
-        values (5L, 3400510L, 'Ignorado', 9L)""")
+        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)        values (1L, 4206451L, 'Médico', 1L)""")
+        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)        values (2L, 32581L, 'Enfermeira/obstetriz', 2L)""")
+        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)        values (3L, 40561317L, 'Parteira', 3L)""")
+        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)        values (4L, 3245354L, 'Outros', 4L)""")
+        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)        values (5L, 3400510L, 'Ignorado', 9L)""")
     except Exception as e:
         logger.error("Error while loading Provider data from DATASUS source to OMOP database: ", str(e))
         sys.exit(-1)
@@ -395,10 +390,11 @@ def loadLocationCnesRebios(file_path: str, file_name: str, spark: SparkSession, 
     StructField("state", StringType(), True), \
     StructField("zip", StringType(), True), \
     StructField("location_source_value", StringType(), True), \
-    StructField("country_concept_id", StringType(), True), \
+    StructField("country_concept_id", LongType(), True), \
     StructField("country_source_value", StringType(), True), \
     StructField("latitude", FloatType(), True), \
-    StructField("longitude", FloatType(), True) \
+    StructField("longitude", FloatType(), True), \
+    StructField("county", StringType(), True) \
    ])
     
     # essa inicialização é para garantir algum retorno ao término da rotina
@@ -416,8 +412,9 @@ def loadLocationCnesRebios(file_path: str, file_name: str, spark: SparkSession, 
         df_load.CO_CNES.alias('location_source_value'), \
         FSql.lit(4075645).cast(LongType()).alias('country_concept_id'), \
         FSql.lit('Brasil').alias('country_source_value'), \
-        df_load.NU_LATITUDE.cast(LongType()).alias('latitude'), \
-        df_load.NU_LONGITUDE.cast(LongType()).alias('latitude'), \
+        df_load.NU_LATITUDE.cast(FloatType()).alias('latitude'), \
+        df_load.NU_LONGITUDE.cast(FloatType()).alias('longitude'), \
+        FSql.lit(None).cast(StringType()).alias('county') \
         ).rdd, df_load_schema)
         
         if df_location.count() > 0:
@@ -436,7 +433,7 @@ def loadLocationCnesRebios(file_path: str, file_name: str, spark: SparkSession, 
             df_location.writeTo("bios.location").append()
             # a junção dos dois df é para ser usado na rotina que insere o care_site.
             # o df vai completo com a PK do location para ser usada como fk no care_site.
-            df_location = (df_location.join(df_load, on=['df_location.location_source_value == df_load.CO_CNES'], how='inner'))
+            df_location = (df_location.join(df_load, [df_location.location_source_value == df_load.CO_CNES], 'inner'))
             logger.info("Cities data succesully written to table LOCATION")
     return df_location
 
