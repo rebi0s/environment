@@ -66,8 +66,8 @@ if sys.argv[1] == 'INIT':
 		if num_args != 3:
 			logger.error("Check the command line usage. For INIT profile, is required 1 parameter. Usage: submit-spark loading.py INIT /path/filename.sql")
 			sys.exit(-1)
-		execute_sql_commands_from_file(spark, sys.argv[2])
-		logger.info("INIT Profile executed with filename: ", sys.argv[2])
+		execute_sql_commands_from_file(spark, sys.argv[2], logger)
+		logger.info(f"INIT Profile executed with filename: {sys.argv[2]}")
 		sys.exit(0)
 	except Exception as e:
 		logger.error("Error while executing INIT profile on OMOP database: ", str(e))
@@ -342,16 +342,16 @@ if sys.argv[1] == 'ETL':
 		#df_sinasc = spark.read.format("CSV").options(header=True, inferSchema=True).load("/home/src/etl/SINASC_REGISTRO_LAIS.csv")
 
         # dataframe with records of Type Of Health Unit
-		df_cnes_tpunid = spark.read.format("iceberg").load(f"bios.type_of_unit")
+		df_cnes_tpunid = spark.read.format("iceberg").load(f"bios.rebios.type_of_unit")
 		# dataframe with existing location records
-		df_location = spark.read.format("iceberg").load(f"bios.location")
+		df_location = spark.read.format("iceberg").load(f"bios.rebios.location")
 		# dataframe with existing care_sites
-		df_care_site = spark.read.format("iceberg").load(f"bios.care_site")
+		df_care_site = spark.read.format("iceberg").load(f"bios.rebios.care_site")
 		# dataframe with concept records
-		df_concept = spark.read.format("iceberg").load(f"bios.concept")
+		df_concept = spark.read.format("iceberg").load(f"bios.rebios.concept")
 
 		#obtem o max person_id para usar na inserção de novos registros
-		count_max_person_df = spark.sql("SELECT greatest(max(person_id),0) + 1 AS max_person FROM bios.person")
+		count_max_person_df = spark.sql("SELECT greatest(max(person_id),0) + 1 AS max_person FROM bios.rebios.person")
 		count_max_person = count_max_person_df.first().max_person
 		#geração dos id's únicos nos dados de entrada. O valor inicial é 0.
 		# a função monotonically_increasing_id() gera números incrementais com a garantia de ser sempre maior que os existentes.
@@ -425,7 +425,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_person.count() > 0:
 		# Persistindo os dados de person no banco.
-			df_person.writeTo("bios.person").append()
+			df_person.writeTo("bios.rebios.person").append()
 		else:
 			exit()
 		# *************************************************************
@@ -458,7 +458,7 @@ if sys.argv[1] == 'ETL':
 							df_obs_period_schema)
 		if df_obs_period.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_obs_period_df = spark.sql("SELECT greatest(max(observation_period_id),0) + 1 AS max_obs_period FROM bios.observation_period")
+			count_max_obs_period_df = spark.sql("SELECT greatest(max(observation_period_id),0) + 1 AS max_obs_period FROM bios.rebios.observation_period")
 			count_max_obs_period = count_max_obs_period_df.first().max_obs_period
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -467,7 +467,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_obs_period = df_obs_period.withColumn("observation_period_id", df_obs_period["observation_period_id"] + count_max_obs_period)
 			# persistindo os dados de observation_period no banco.
-			df_obs_period.writeTo("bios.observation_period").append()
+			df_obs_period.writeTo("bios.rebios.observation_period").append()
 
 
 
@@ -509,7 +509,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
 			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -518,7 +518,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
-			df_cond_occur.writeTo("bios.condition_occurrence").append()
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -542,7 +542,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
 			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -551,7 +551,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
-			df_cond_occur.writeTo("bios.condition_occurrence").append()
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -574,7 +574,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
 			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -583,7 +583,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
-			df_cond_occur.writeTo("bios.condition_occurrence").append()
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -606,7 +606,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
 			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -615,7 +615,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
-			df_cond_occur.writeTo("bios.condition_occurrence").append()
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -638,7 +638,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
 			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -647,7 +647,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
-			df_cond_occur.writeTo("bios.condition_occurrence").append()
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -676,7 +676,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
 			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -685,7 +685,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
-			df_cond_occur.writeTo("bios.condition_occurrence").append()
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
 
 
 		# *************************************************************
@@ -712,7 +712,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
 			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -721,7 +721,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
-			df_cond_occur.writeTo("bios.condition_occurrence").append()
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -744,7 +744,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
 			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -753,7 +753,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
-			df_cond_occur.writeTo("bios.condition_occurrence").append()
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -781,7 +781,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
 			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -790,7 +790,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
-			df_cond_occur.writeTo("bios.condition_occurrence").append()
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -815,7 +815,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.condition_occurrence")
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
 			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -824,7 +824,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
-			df_cond_occur.writeTo("bios.condition_occurrence").append()
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
 
 		# registro da procedure_occurrence
 		#CREATE TABLE procedure_occurrence (
@@ -884,7 +884,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_proc_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
 			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -893,7 +893,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
 			# persistindo os dados de observation_period no banco.
-			df_proc_occur.writeTo("bios.procedure_occurrence").append()
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
 
 		# *************************************************************
 		#  PROCEDURE_OCCURRENCE - Persistência dos dados 
@@ -920,7 +920,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_proc_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
 			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -929,7 +929,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
 			# persistindo os dados de observation_period no banco.
-			df_proc_occur.writeTo("bios.procedure_occurrence").append()
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
 
 		# *************************************************************
 		#  PROCEDURE_OCCURRENCE - Persistência dos dados 
@@ -957,7 +957,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_proc_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
 			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -966,7 +966,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
 			# persistindo os dados de observation_period no banco.
-			df_proc_occur.writeTo("bios.procedure_occurrence").append()
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
 
 		# *************************************************************
 		#  PROCEDURE_OCCURRENCE - Persistência dos dados 
@@ -990,7 +990,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_proc_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
 			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -999,7 +999,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
 			# persistindo os dados de observation_period no banco.
-			df_proc_occur.writeTo("bios.procedure_occurrence").append()
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
 
 		# *************************************************************
 		#  PROCEDURE_OCCURRENCE - Persistência dos dados 
@@ -1025,7 +1025,7 @@ if sys.argv[1] == 'ETL':
 										df_proc_occur_schema)
 		if df_proc_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.procedure_occurrence")
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
 			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -1034,7 +1034,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
 			# persistindo os dados de observation_period no banco.
-			df_proc_occur.writeTo("bios.procedure_occurrence").append()
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
 
 
 		# resgistro do measurement
@@ -1098,7 +1098,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_measurement.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
+			count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.rebios.measurement")
 			count_max_measurement = count_max_measurement_df.first().max_measurement
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -1107,7 +1107,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
 			# persistindo os dados de observation_period no banco.
-			df_measurement.writeTo("bios.measurement").append()
+			df_measurement.writeTo("bios.rebios.measurement").append()
 
 		# *************************************************************
 		#  MEASUREMENT - Persistência dos dados 
@@ -1130,7 +1130,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_measurement.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
+			count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.rebios.measurement")
 			count_max_measurement = count_max_measurement_df.first().max_measurement
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -1139,7 +1139,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
 			# persistindo os dados de observation_period no banco.
-			df_measurement.writeTo("bios.measurement").append()
+			df_measurement.writeTo("bios.rebios.measurement").append()
 
 		# *************************************************************
 		#  MEASUREMENT - Persistência dos dados 
@@ -1162,7 +1162,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_measurement.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
+			count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.rebios.measurement")
 			count_max_measurement = count_max_measurement_df.first().max_measurement
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -1171,7 +1171,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
 			# persistindo os dados de observation_period no banco.
-			df_measurement.writeTo("bios.measurement").append()
+			df_measurement.writeTo("bios.rebios.measurement").append()
 
 		# *************************************************************
 		#  MEASUREMENT - Persistência dos dados 
@@ -1193,7 +1193,7 @@ if sys.argv[1] == 'ETL':
 										df_measurement_schema)
 		if df_measurement.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.measurement")
+			count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.rebios.measurement")
 			count_max_measurement = count_max_measurement_df.first().max_measurement
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -1202,7 +1202,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
 			# persistindo os dados de observation_period no banco.
-			df_measurement.writeTo("bios.measurement").append()
+			df_measurement.writeTo("bios.rebios.measurement").append()
 
 		#registro observation
 		#CREATE TABLE observation (
@@ -1264,7 +1264,7 @@ if sys.argv[1] == 'ETL':
 
 		if df_observation.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_observation_df = spark.sql("SELECT greatest(max(observation_id),0) + 1 AS max_observation FROM bios.observation")
+			count_max_observation_df = spark.sql("SELECT greatest(max(observation_id),0) + 1 AS max_observation FROM bios.rebios.observation")
 			count_max_observation = count_max_observation_df.first().max_observation
 			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
 			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
@@ -1273,7 +1273,7 @@ if sys.argv[1] == 'ETL':
 			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
 			df_observation = df_observation.withColumn("observation_id", df_observation["observation_id"] + count_max_observation)
 			# persistindo os dados de observation_period no banco.
-			df_observation.writeTo("bios.observation").append()
+			df_observation.writeTo("bios.rebios.observation").append()
 
 		#registro datasus_person (extension table to receive extras fields from SINASC/SIM)
 		#Create table datasus_person (
@@ -1391,7 +1391,7 @@ if sys.argv[1] == 'ETL':
 
 		# persistindo os dados de observation_period no banco.
 		if df_datasus_person.count() > 0:
-			df_datasus_person.writeTo("bios.datasus_person").append()
+			df_datasus_person.writeTo("bios.rebios.datasus_person").append()
 
 
 		logger.info("ETL execution finished with success. Please, check the log file.")

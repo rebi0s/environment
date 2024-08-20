@@ -58,7 +58,7 @@ def loadOMOPConcept(file_path: str, file_name: str, spark: SparkSession, logger:
         ).rdd, df_concept_schema)
 
         df_concept.show()
-        df_concept.writeTo("bios.concept").append()
+        df_concept.writeTo("bios.rebios.concept").append()
         logger.info("Data succesully written to table CONCEPT")
 
 
@@ -90,7 +90,7 @@ def loadOMOPConceptClass(file_path: str, file_name: str, spark: SparkSession, lo
         ).rdd, df_concept_class_schema)
 
         df_concept_class.show()
-        df_concept_class.writeTo("bios.concept_class").append()
+        df_concept_class.writeTo("bios.rebios.concept_class").append()
         logger.info("Data succesully written to table CONCEPT_CLASS")
 
 def loadOMOPConceptSynonym(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
@@ -121,7 +121,7 @@ def loadOMOPConceptSynonym(file_path: str, file_name: str, spark: SparkSession, 
         ).rdd, df_concept_synonym_schema)
 
         df_concept_synonym.show()
-        df_concept_synonym.writeTo("bios.concept_synonym").append()
+        df_concept_synonym.writeTo("bios.rebios.concept_synonym").append()
         logger.info("Data succesully written to table CONCEPT_SYNONYM")
 
 def loadOMOPDrugStrength(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
@@ -181,7 +181,7 @@ def loadOMOPDrugStrength(file_path: str, file_name: str, spark: SparkSession, lo
         ).rdd, df_iceberg_schema)
 
         df_iceberg.show()
-        df_iceberg.writeTo("bios.drug_strength").append()
+        df_iceberg.writeTo("bios.rebios.drug_strength").append()
         logger.info("Data succesully written to table DRUG_STRENGTH")
 
 def loadOMOPVocabulary(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
@@ -219,7 +219,7 @@ def loadOMOPVocabulary(file_path: str, file_name: str, spark: SparkSession, logg
         ).rdd, df_iceberg_schema)
 
         df_iceberg.show()
-        df_iceberg.writeTo("bios.vocabulary").append()
+        df_iceberg.writeTo("bios.rebios.vocabulary").append()
         logger.info("Data succesully written to table VOCABULARY")
 
 
@@ -254,7 +254,7 @@ def loadOMOPConceptAncestor(file_path: str, file_name: str, spark: SparkSession,
         ).rdd, df_iceberg_schema)
 
         df_iceberg.show()
-        df_iceberg.writeTo("bios.concept_ancestor").append()
+        df_iceberg.writeTo("bios.rebios.concept_ancestor").append()
         logger.info("Data succesully written to table CONCEPT_ANCESTOR")
 
 
@@ -295,7 +295,7 @@ def loadOMOPConceptRelationship(file_path: str, file_name: str, spark: SparkSess
         ).rdd, df_iceberg_schema)
 
         df_iceberg.show()
-        df_iceberg.writeTo("bios.concept_relationship").append()
+        df_iceberg.writeTo("bios.rebios.concept_relationship").append()
         logger.info("Data succesully written to table CONCEPT_RELATIONSHIP")
 
 def loadOMOPDomain(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
@@ -326,7 +326,7 @@ def loadOMOPDomain(file_path: str, file_name: str, spark: SparkSession, logger: 
         ).rdd, df_iceberg_schema)
 
         df_iceberg.show()
-        df_iceberg.writeTo("bios.domain").append()
+        df_iceberg.writeTo("bios.rebios.domain").append()
         logger.info("Data succesully written to table DOMAIN")
 
 def loadOMOPRelationship(file_path: str, file_name: str, spark: SparkSession, logger: logging.Logger):
@@ -366,6 +366,6 @@ def loadOMOPRelationship(file_path: str, file_name: str, spark: SparkSession, lo
         ).rdd, df_iceberg_schema)
 
         df_iceberg.show()
-        df_iceberg.writeTo("bios.relationship").append()
+        df_iceberg.writeTo("bios.rebios.relationship").append()
         logger.info("Data succesully written to table RELATIONSHIP")
 

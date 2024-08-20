@@ -30,6 +30,7 @@ def initSpark():
         .set("spark.sql.catalog.spark_catalog","org.apache.iceberg.spark.SparkSessionCatalog")
         .set("spark.sql.catalogImplementation", "in-memory")
         .set("spark.sql.defaultCatalog", os.getenv("CTRNA_CATALOG_DEFAULT","bios")) # Name of the Iceberg catalog
+        .set("spark.sql.catalog.bios.database", "rebios") # Nome do banco de dados
     )
     spark = SparkSession.builder.config(conf=conf).getOrCreate()
     return spark
@@ -65,11 +66,14 @@ def addLogHandler(idLogger: logging.Logger, log_level: str):
     idLogger.addHandler(handler)
     return handler
 
-def execute_sql_commands_from_file(spark, file_path):
+def execute_sql_commands_from_file(spark, file_path, logger: logging.Logger):
     df = spark.read.text(file_path)
     
-    commands = df.rdd.flatMap(lambda x: x[0].split(";")).collect()
+    commands = df.rdd.flatMap(lambda x: x[0].split(";")).filter(lambda x: x.strip() != "").collect()
     for command in commands:
-        spark.sql(command)
-
-
+        try:
+            logger.info(f"Executing command: {command}")
+            spark.sql(command)
+            logger.info("Command executed.")
+        except Exception as e:
+            logger.error(f"Error while executing INIT profile on OMOP database: {str(e)}")

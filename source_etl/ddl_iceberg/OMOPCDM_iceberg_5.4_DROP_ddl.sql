@@ -1,5 +1,5 @@
 drop table concept;
-drop table concept_classs;
+drop table concept_class;
 drop table vocabulary;
 drop table domain;
 drop table location;
