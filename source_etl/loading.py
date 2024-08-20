@@ -141,7 +141,7 @@ if sys.argv[1] == 'DATASUS':
 		logger.info("External data from DATASUS succesfully loaded to OMOP database.")
 		sys.exit(0)
 	except Exception as e:
-		logger.error("Error while loading DATASUS data to OMOP database: ", str(e))
+		logger.error(f"Error while loading DATASUS data to OMOP database: {str(e)}")
 		sys.exit(-1)
 
 if sys.argv[1] == 'VOCAB_CTRNA':

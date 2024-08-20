@@ -137,13 +137,13 @@ def loadProviderRebios(spark: SparkSession, logger: logging.Logger):
     # # TPNASCASSI	Nascimento foi assistido por? Valores: 1– Médico; 2– Enfermeira/obstetriz; 3– Parteira; 4– Outros; 9– Ignorado
 
     try:
-        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)        values (1L, 4206451L, 'Médico', 1L)""")
-        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)        values (2L, 32581L, 'Enfermeira/obstetriz', 2L)""")
-        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)        values (3L, 40561317L, 'Parteira', 3L)""")
-        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)        values (4L, 3245354L, 'Outros', 4L)""")
-        spark.sql("""insert into provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)        values (5L, 3400510L, 'Ignorado', 9L)""")
+        spark.sql("""insert into bios.rebios.provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)        values (1L, 4206451L, 'Médico', 1L)""")
+        spark.sql("""insert into bios.rebios.provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)        values (2L, 32581L, 'Enfermeira/obstetriz', 2L)""")
+        spark.sql("""insert into bios.rebios.provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)        values (3L, 40561317L, 'Parteira', 3L)""")
+        spark.sql("""insert into bios.rebios.provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)        values (4L, 3245354L, 'Outros', 4L)""")
+        spark.sql("""insert into bios.rebios.provider (provider_id, specialty_concept_id, specialty_source_value, specialty_source_concept_id)        values (5L, 3400510L, 'Ignorado', 9L)""")
     except Exception as e:
-        logger.error("Error while loading Provider data from DATASUS source to OMOP database: ", str(e))
+        logger.error(f"Error while loading Provider data from DATASUS source to OMOP database: {str(e)}")
         sys.exit(-1)
 
 def loadCareSiteRebios(file_path: str, file_name: str, df_location_cnes: DataFrame, spark: SparkSession, logger: logging.Logger):
@@ -240,9 +240,9 @@ def loadCareSiteRebios(file_path: str, file_name: str, df_location_cnes: DataFra
 
     #esses dois estabelecimentos são valores pré-definidos próprios do Climaterna
     #não existe registro em location correspondente
-    spark.sql("""insert into care_site(care_site_id,care_site_name,place_of_service_concept_id,location_id,care_site_source_value,place_of_service_source_value)
+    spark.sql("""insert into bios.rebios.care_site(care_site_id,care_site_name,place_of_service_concept_id,location_id,care_site_source_value,place_of_service_source_value)
     values (3L, 'Nascimento no Domicílio', 43021744L, null, 3L, 'Domicílio')""")   #43021744 Born at home
-    spark.sql("""insert into care_site(care_site_id,care_site_name,place_of_service_concept_id,location_id,care_site_source_value,place_of_service_source_value)
+    spark.sql("""insert into bios.rebios.care_site(care_site_id,care_site_name,place_of_service_concept_id,location_id,care_site_source_value,place_of_service_source_value)
     values (4L, "Nascimento em Outros Locais", 45881550L, null, 4L, "Outros")""") #45881550 Place of birth unknown
 
     # os estabelecimentos de saúde serão cadastrados em location e repetidos como care_site por falta de detalhes no SIM/SINASC. O care_site terá FK do location.
@@ -500,8 +500,8 @@ def loadLocationCityRebios(file_path: str, file_name: str, spark: SparkSession, 
                             df_load.geocodigo.alias('location_source_value'), \
                             FSql.lit(4075645).cast(LongType()).alias('country_concept_id'), \
                             FSql.lit('Brasil').alias('country_source_value'), \
-                            df_load.latitude.cast(FloatType()).alias('latitude'), \
-                            df_load.longitude.cast(FloatType()).alias('longitude'), \
+                            df_load.Latitude.cast(FloatType()).alias('latitude'), \
+                            df_load.Longitude.cast(FloatType()).alias('longitude'), \
                             FSql.lit(None).cast(StringType()).alias('address_1'), \
                             FSql.lit(None).cast(StringType()).alias('address_2'), \
                             FSql.lit(None).cast(StringType()).alias('zip') \
