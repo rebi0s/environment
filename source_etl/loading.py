@@ -322,7 +322,7 @@ if sys.argv[1] == 'ETL':
 				logger.info("Arquivo SINASC não localizado. Carga interrompida.")
 				sys.exit(-1)
 
-		df_sinasc = spark.read.parquet(os.path.join(source_path, arquivo_entrada))
+		df_sinasc = spark.read.parquet(os.path.join(sys.argv[2], sys.argv[3]))
 
 		# column HORANASC is presenting null values on source file and that will be filled with 0000
 		df_sinasc=df_sinasc.fillna({"HORANASC": "0000"})
