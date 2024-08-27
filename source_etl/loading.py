@@ -1674,3 +1674,116 @@ if sys.argv[1] == 'ETL':
 		#return failure
 		sys.exit(-1)
  
+if sys.argv[1] == 'CLIMATE':
+	try:
+		if num_args != 4:
+			logger.error("Check the command line usage. For CLIMATE the options are as below.")
+			logger.error("Usage: ")
+			logger.error("   submit-spark loading.py CLIMATE /path_to_folder_with_climate_data file_name_with_climate_data")
+			sys.exit(-1)
+
+		logger.info("Loading external data from CLIMATE to Climaterna database.")
+
+		df_climate = spark.read.parquet(os.path.join(sys.argv[2], sys.argv[3]))
+
+		df_climate_schema = StructType([ \
+		StructField("code_muni", StringType(), True), \
+		StructField("name_muni", StringType(), True), \
+		StructField("code_state", StringType(), True), \
+		StructField("abbrev_state", StringType(), True), \
+		StructField("name_state", StringType(), True), \
+		StructField("code_region", FloatType(), True), \
+		StructField("name_region", StringType(), True), \
+		StructField("date", StringType(), True), \
+		StructField("TMIN_mean", FloatType(), True), \
+		StructField("TMIN_min", FloatType(), True), \
+		StructField("TMIN_max", FloatType(), True), \
+		StructField("TMIN_stdev", FloatType(), True), \
+		StructField("TMAX_mean", FloatType(), True), \
+		StructField("TMAX_min", FloatType(), True), \
+		StructField("TMAX_max", FloatType(), True), \
+		StructField("TMAX_stdev", FloatType(), True), \
+		StructField("PR_mean", FloatType(), True), \
+		StructField("PR_min", FloatType(), True), \
+		StructField("PR_max", FloatType(), True), \
+		StructField("PR_stdev", FloatType(), True), \
+		StructField("PR_sum", FloatType(), True), \
+		StructField("ETo_mean", FloatType(), True), \
+		StructField("ETo_min", FloatType(), True), \
+		StructField("ETo_max", FloatType(), True), \
+		StructField("ETo_stdev", FloatType(), True), \
+		StructField("ETo_sum", FloatType(), True), \
+		StructField("RH_mean", FloatType(), True), \
+		StructField("RH_min", FloatType(), True), \
+		StructField("RH_max", FloatType(), True), \
+		StructField("RH_stdev", FloatType(), True), \
+		StructField("Rs_mean", FloatType(), True), \
+		StructField("Rs_min", FloatType(), True), \
+		StructField("Rs_max", FloatType(), True), \
+		StructField("Rs_stdev", FloatType(), True), \
+		StructField("u2_mean", FloatType(), True), \
+		StructField("u2_min", FloatType(), True), \
+		StructField("u2_max", FloatType(), True), \
+		StructField("u2_stdev", FloatType(), True) \
+		])
+
+		# *************************************************************
+		#  DATASUS_PERSON - Persistência dos dados 
+		#  Para cada registro do source será criado um único correspondente na tabela DATASUS_PERSON
+		#  Source field: TPROBSON
+		# *************************************************************
+		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_climate_iceberg=spark.createDataFrame(df_climate.select( \
+		df_climate.code_muni, \
+		df_climate.name_muni, \
+		df_climate.code_state, \
+		df_climate.abbrev_state, \
+		df_climate.name_state, \
+		df_climate.code_region, \
+		df_climate.name_region, \
+		df_climate.date, \
+		df_climate.TMIN_mean, \
+		df_climate.TMIN_min, \
+		df_climate.TMIN_max, \
+		df_climate.TMIN_stdev, \
+		df_climate.TMAX_mean, \
+		df_climate.TMAX_min, \
+		df_climate.TMAX_max, \
+		df_climate.TMAX_stdev, \
+		df_climate.PR_mean, \
+		df_climate.PR_min, \
+		df_climate.PR_max, \
+		df_climate.PR_stdev, \
+		df_climate.PR_sum, \
+		df_climate.ETo_mean, \
+		df_climate.ETo_min, \
+		df_climate.ETo_max, \
+		df_climate.ETo_stdev, \
+		df_climate.ETo_sum, \
+		df_climate.RH_mean, \
+		df_climate.RH_min, \
+		df_climate.RH_max, \
+		df_climate.RH_stdev, \
+		df_climate.Rs_mean, \
+		df_climate.Rs_min, \
+		df_climate.Rs_max, \
+		df_climate.Rs_stdev, \
+		df_climate.u2_mean, \
+		df_climate.u2_min, \
+		df_climate.u2_max, \
+		df_climate.u2_stdev \
+		).rdd, df_climate_schema)
+
+		# persistindo os dados de observation_period no banco.
+		if df_climate_iceberg.count() > 0:
+			df_climate_iceberg.writeTo("bios.rebios.climate").append()
+
+		logger.info("CLIMATE data execution finished with success. Please, check the log file.")
+		# return success
+		sys.exit(0)
+
+	except Exception as e:
+		logger.error(f"Fatal error while loading data from SINASC: {str(e)}")
+		#return failure
+		sys.exit(-1)
