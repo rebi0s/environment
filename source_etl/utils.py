@@ -77,3 +77,21 @@ def execute_sql_commands_from_file(spark, file_path, logger: logging.Logger):
             logger.info("Command executed.")
         except Exception as e:
             logger.error(f"Error while executing INIT profile on OMOP database: {str(e)}")
+
+
+def loadPortgreSql(file_path: StringType, table_name: StringType):
+    spark = SparkSession.builder.appName("LoadPostgres").config("spark.jars", "/opt/spark/jars/postgresql-42.6.0.jar").getOrCreate()
+
+    # Lê o arquivo Parquet
+    parquet_file_path = file_path
+    df = spark.read.parquet("/home/etl-rebios/BR-DWGD_2010.parquet")
+
+    # Configurações do PostgreSQL
+    postgres_url = "jdbc:postgresql://host.docker.internal:5432/examples"
+    postgres_properties = {"user": "postgres","password": "23mJzsfUfUJqujYc!","driver": "org.postgresql.Driver"}
+
+    # Escreve o DataFrame no PostgreSQL
+    df.write.jdbc(url=postgres_url, table="clima_2010", mode="overwrite", properties=postgres_properties)
+
+    # Encerra a sessão Spark
+    spark.stop()

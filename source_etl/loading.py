@@ -28,7 +28,7 @@ import os
 import sys
 import logging
 from datetime import datetime
-from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DateType, TimestampType, LongType
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DateType, TimestampType, LongType, FloatType
 from pyspark.sql.functions import monotonically_increasing_id
 from pyspark.sql import functions as FSql
 from pyspark.sql import DataFrame
@@ -125,7 +125,7 @@ if sys.argv[1] == 'DATASUS':
 		logger.info("Loading external data from DATASUS to OMOP database.")
 		if sys.argv[2] == "-city":
 		    #loadStates(spark, logger, sys.argv[3])
-		    loadLocationCityRebios(sys.argv[3], sys.argv[4], spark, logger)
+			loadLocationCityRebios(sys.argv[3], sys.argv[4], spark, logger)
 		if sys.argv[2] == "-care":
 			df_location_cnes = loadLocationCnesRebios(sys.argv[3], sys.argv[4], spark, logger)
 			if df_location_cnes.count() > 0:
@@ -155,6 +155,12 @@ if sys.argv[1] == 'VOCAB_CTRNA':
 
 if sys.argv[1] == 'ETL':
 	try:
+		if num_args != 4:
+			logger.error("Check the command line usage. For ETL the options are as below.")
+			logger.error("Usage: ")
+			logger.error("   submit-spark loading.py ETL /path_to_folder_with_source_file source_file_name")
+			sys.exit(-1)
+
 		logger.info("Initiating ETL processing from source files to OMOP database.")
 		####################################################################
 		##  Leitura do arquivo de entrada (source)                        ##
@@ -308,15 +314,27 @@ if sys.argv[1] == 'ETL':
 
 
 		#carga dos dados do parquet do SINASC
-		source_path = os.getenv("CTRNA_SOURCE_SINASC_PATH","/home/warehouse/")
-		arquivo_entrada = "sinasc_2010_2022.parquet"
+		#source_path = os.getenv("CTRNA_SOURCE_SINASC_PATH","/home/etl-rebios/")
+		#arquivo_entrada = "sinasc_2010_2022.parquet"
 
 		# leitura do sinasc original em formato parquet
-		if not os.path.isfile(os.path.join(source_path, arquivo_entrada)):
+		if not os.path.isfile(os.path.join(sys.argv[2], sys.argv[3])):
 				logger.info("Arquivo SINASC não localizado. Carga interrompida.")
-				sys.exit(0)
+				sys.exit(-1)
 
 		df_sinasc = spark.read.parquet(os.path.join(source_path, arquivo_entrada))
+
+		# column HORANASC is presenting null values on source file and that will be filled with 0000
+		df_sinasc=df_sinasc.fillna({"HORANASC": "0000"})
+
+        # |-- LOCNASC <- as.factor(.data$LOCNASC): string (nullable = true)
+        # |-- IDADEMAE <- as.factor(.data$IDADEMAE): string (nullable = true)
+        # |-- ESTCIVMAE <- as.factor(.data$ESTCIVMAE): string (nullable = true)
+        # |-- ESCMAE <- as.factor(.data$ESCMAE): string (nullable = true)
+        # |-- CODOCUPMAE: string (nullable = true)
+        # |-- GESTACAO <- as.factor(.data$GESTACAO): string (nullable = true)
+        # |-- PARTO <- as.factor(.data$PARTO): string (nullable = true)
+
 
 		####################################################################
 		##  Carrega em memória os cadastros                               ##
@@ -342,13 +360,16 @@ if sys.argv[1] == 'ETL':
 		#df_sinasc = spark.read.format("CSV").options(header=True, inferSchema=True).load("/home/src/etl/SINASC_REGISTRO_LAIS.csv")
 
         # dataframe with records of Type Of Health Unit
-		df_cnes_tpunid = spark.read.format("iceberg").load(f"bios.rebios.type_of_unit")
+		#df_cnes_tpunid = spark.read.format("iceberg").load(f"bios.rebios.type_of_unit")
 		# dataframe with existing location records
 		df_location = spark.read.format("iceberg").load(f"bios.rebios.location")
 		# dataframe with existing care_sites
 		df_care_site = spark.read.format("iceberg").load(f"bios.rebios.care_site")
+		# dataframe with existing providers
+		df_provider = spark.read.format("iceberg").load(f"bios.rebios.provider")
+
 		# dataframe with concept records
-		df_concept = spark.read.format("iceberg").load(f"bios.rebios.concept")
+		#df_concept = spark.read.format("iceberg").load(f"bios.rebios.concept")
 
 		#obtem o max person_id para usar na inserção de novos registros
 		count_max_person_df = spark.sql("SELECT greatest(max(person_id),0) + 1 AS max_person FROM bios.rebios.person")
@@ -362,14 +383,16 @@ if sys.argv[1] == 'ETL':
 		# esses df's poderão conter valores nulos para município e estabelecimento de saúde, caso não haja cadastro.
 		# a partir da coluna person_id, os registros de entrada se tornam unicamente identificados.
 		# left outer join entre sinasc e location para associar dados de município
-		df_sinasc_location = (df_sinasc.join(df_location, on=['df_sinasc.CODMUNRES == df_location.location_id'], how='left'))
+		#df_sinasc_location = (df_sinasc.join(df_location, on=['df_sinasc.CODMUNRES == df_location.location_id'], how='left'))
+		df_sinasc = (df_sinasc.join(df_location, [df_sinasc.CODMUNRES == df_location.location_source_value.substr(1, 6)], 'left'))
+		df_sinasc = df_sinasc.withColumnRenamed("location_id","location_id_city")
 		# left outer join entre sinasc e care site para associar dados de estabelecimento de saúde
-		df_sinasc_cnes = (df_sinasc.join(df_care_site, on=['df_sinasc.CODESTAB == df_care_site.care_site_source_value'], how='left'))
-
+		df_sinasc = (df_sinasc.join(df_care_site, [df_sinasc.CODESTAB == df_care_site.care_site_source_value], 'left'))
+		df_sinasc = df_sinasc.withColumnRenamed("location_id","location_id_care_site")
 
 		#####  CRIAR O DF PARA CONTENDO O PERSON_ID E O CID10 CORRESPONDENTE
 		# left outer join entre sinasc e vocabulário para associar dados de 
-		df_sinasc_cid10 = (df_sinasc.join(df_concept, on=['df_sinasc.codmunres == df_concept.location_id'], how='left'))
+		#df_sinasc_cid10 = (df_sinasc.join(df_concept, on=['df_sinasc.codmunres == df_concept.location_id'], how='left'))
 
 		# tratamento para resolver a falta de FK's antes da inserção no banco
 		# inserir novos municípios 
@@ -386,7 +409,7 @@ if sys.argv[1] == 'ETL':
 			StructField("year_of_birth", IntegerType(), False), \
 			StructField("month_of_birth", IntegerType(), True), \
 			StructField("day_of_birth", IntegerType(), True), \
-			StructField("birth_datetime", TimestampType(), True), \
+			StructField("birth_timestamp", TimestampType(), True), \
 			StructField("race_concept_id", LongType(), False), \
 			StructField("ethnicity_concept_id", LongType(), False), \
 			StructField("location_id", LongType(), True), \
@@ -401,33 +424,43 @@ if sys.argv[1] == 'ETL':
 			StructField("ethnicity_source_concept_id", LongType(), True) \
 		])
 
-		df_person = spark.createDataFrame(df_sinasc.select( \
-		df_sinasc.person_id, \
-		FSql.when(df_sinasc['SEXO'] == 'M', 8507).FSql.when(df_sinasc['SEXO'] == 'F', 8532).FSql.when(df_sinasc['SEXO'] == '1', 8507).FSql.when(df_sinasc['SEXO'] == '2', 8532).otherwise(8551).alias('gender_concept_id'), \
-		FSql.year(FSql.make_date(FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 5, 4), FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 3, 2), FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("year_of_birth"), \
-		FSql.month(FSql.make_date(FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 5, 4), FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 3, 2), FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("month_of_birth"), \
-		FSql.dayofmonth(FSql.make_date(FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 5, 4), FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 3, 2), FSql.substring(FSql.lpad(df_sinasc.DTNASC,8,'0'), 1, 2))).alias("day_of_birth"), \
-		FSql.to_timestamp(FSql.concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('birth_timestamp'), \
-		FSql.when(df_sinasc['RACACOR'] == 1, 3212942).FSql.when(df_sinasc['RACACOR'] == 2, 3213733).FSql.when(df_sinasc['RACACOR'] == 3, 3213498).FSql.when(df_sinasc['RACACOR'] == 4, 3213487).otherwise(3213694).alias('race_concept_id'),  \
-		FSql.lit(38003563).alias('ethnicity_concept_id'), \
-		df_sinasc.CODMUNRES.alias('location_id'), \
-		FSql.lit(None).cast(StringType()).alias('provider_id'), \
-		df_sinasc.CODESTAB.alias('care_site_id'), \
-		FSql.lit(None).cast(StringType()).alias('person_source_value'), \
-		df_sinasc.SEXO.alias('gender_source_value'),
-		FSql.lit(None).cast(StringType()).alias('gender_source_concept_id'), \
-		df_sinasc.RACACOR.alias('race_source_value'),  
-		FSql.lit(None).cast(StringType()).alias('race_source_concept_id'), \
-		FSql.lit(None).cast(StringType()).alias('ethnicity_source_value'), \
-		FSql.lit(None).cast(StringType()).alias('ethnicity_source_concept_id') \
-		).rdd, \
-		df_person_schema)
+		df_person = spark.createDataFrame(df_sinasc.select(
+			FSql.col("person_id"),
+			FSql.when((FSql.col("SEXO") == 'M') | (FSql.col("SEXO") == '1') | (FSql.col("SEXO") == 'Masculino'), 8507)
+			.when((FSql.col("SEXO") == 'F') | (FSql.col("SEXO") == '2') | (FSql.col("SEXO") == 'Feminino'), 8532)
+			.otherwise(8551).alias("gender_concept_id"),
+			FSql.coalesce(FSql.year(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 10, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), 'yyyy-MM-dd HHmm')), FSql.lit('0000').cast(IntegerType())).alias("year_of_birth"),
+			FSql.coalesce(FSql.month(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 10, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), 'yyyy-MM-dd HHmm')), FSql.lit('00').cast(IntegerType())).alias("month_of_birth"),
+			FSql.coalesce(FSql.dayofmonth(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 10, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), 'yyyy-MM-dd HHmm')), FSql.lit('00').cast(IntegerType())).alias("day_of_birth"),
+			FSql.to_timestamp(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 10, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), 'yyyy-MM-dd HHmm')).alias("birth_timestamp"),
+			FSql.when ((FSql.col("RACACOR") == 1) | (FSql.col("RACACOR") == 'Branca'), 3212942)
+			.when((FSql.col("RACACOR") == 2) | (FSql.col("RACACOR") == 'Preta'), 3213733)
+			.when((FSql.col("RACACOR") == 3) | (FSql.col("RACACOR") == 'Amarela'), 3213498)
+			.when((FSql.col("RACACOR") == 4) | (FSql.col("RACACOR") == 'Parda'), 3213487)
+			.when((FSql.col("RACACOR") == 5) | (FSql.col("RACACOR") == 'Indígena'), 3213694)
+			.otherwise(763013).alias("race_concept_id"),
+			FSql.lit(38003563).alias('ethnicity_concept_id'),
+			FSql.col("location_id_city").alias('location_id'),
+			FSql.lit(None).cast(StringType()).alias('provider_id'),
+			FSql.col("location_id_care_site").alias('care_site_id'),
+			FSql.lit(None).cast(StringType()).alias('person_source_value'),
+			FSql.col("SEXO").alias('gender_source_value'),
+			FSql.lit(None).cast(StringType()).alias('gender_source_concept_id'),
+			FSql.coalesce(FSql.col("RACACOR"), FSql.lit('Nulo')).alias('race_source_value'),
+			FSql.lit(None).cast(StringType()).alias('race_source_concept_id'),
+			FSql.lit(None).cast(StringType()).alias('ethnicity_source_value'),
+			FSql.lit(None).cast(StringType()).alias('ethnicity_source_concept_id')
+		).rdd, df_person_schema)
+
 
 		if df_person.count() > 0:
-		# Persistindo os dados de person no banco.
+			# Persistindo os dados de person no banco.
+			df_person.show()
 			df_person.writeTo("bios.rebios.person").append()
+			logger.info("Table Person was succesfully updated with SINASC data.")
 		else:
-			exit()
+			logger.error("Erro ao processar arquivo SINASC. Nenhum registro localizado para carregamento.")
+			exit(-1)
 		# *************************************************************
 		#  OBSERVATION_PERIOD - Persistência dos dados 
 		# *************************************************************
@@ -442,20 +475,24 @@ if sys.argv[1] == 'ETL':
 		df_obs_period_schema = StructType([ \
 			StructField("observation_period_id", LongType(), False), \
 			StructField("person_id", LongType(), False), \
-			StructField("observation_period_start_date", DateType(), False), \
+			StructField("observation_period_start_date", TimestampType(), False), \
 			StructField("observation_period_end_date", TimestampType(), False), \
 			StructField("period_type_concept_id", LongType(), False) \
 		])
 
+		#FSql.to_timestamp(concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias("observation_period_start_date"), \
+		#FSql.to_timestamp(concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('observation_period_end_date'), \
+
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_obs_period=spark.createDataFrame(df_sinasc.select(\
-							FSql.lit(0).cast(LongType()).alias('observation_period_id'), \
-							df_sinasc.person_id.alias('person_id'), \
-							FSql.to_timestamp(concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias("observation_period_start_date"), \
-							FSql.to_timestamp(concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('observation_period_end_date'), \
-							FSql.lit(4193440).alias('period_type_concept_id')).rdd, \
-							df_obs_period_schema)
+		FSql.lit(0).cast(LongType()).alias('observation_period_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.to_timestamp(FSql.to_timestamp(FSql.coalesce(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 10, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), FSql.lit('1991-01-01 0000')), 'yyyy-MM-dd HHmm')).alias("observation_period_start_date"),\
+		FSql.to_timestamp(FSql.to_timestamp(FSql.coalesce(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 10, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), FSql.lit('1991-01-01 0000')), 'yyyy-MM-dd HHmm')).alias("observation_period_end_date"),\
+		FSql.lit(4193440).alias('period_type_concept_id')).rdd, \
+		df_obs_period_schema)
+
 		if df_obs_period.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
 			count_max_obs_period_df = spark.sql("SELECT greatest(max(observation_period_id),0) + 1 AS max_obs_period FROM bios.rebios.observation_period")
@@ -490,22 +527,40 @@ if sys.argv[1] == 'ETL':
 		StructField("person_id", LongType(), False), \
 		StructField("condition_concept_id", LongType(), False), \
 		StructField("condition_start_date", DateType(), False), \
+        StructField("condition_start_timestamp", TimestampType(), True), \
 		StructField("condition_end_date", DateType(), True), \
+        StructField("condition_end_timestamp", TimestampType(), True), \
 		StructField("condition_type_concept_id", LongType(), False), \
-		StructField("condition_source_value", StringType(), True) \
+		StructField("condition_status_concept_id", LongType(), True), \
+		StructField("stop_reason", StringType(), True), \
+		StructField("provider_id", LongType(), True), \
+		StructField("visit_occurrence_id", LongType(), True), \
+		StructField("visit_detail_id", LongType(), True), \
+		StructField("condition_source_value", StringType(), True), \
+		StructField("condition_source_concept_id", LongType(), True), \
+		StructField("condition_status_source_value", StringType(), True)
 		])
 
-		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.when(df_sinasc['STDNEPIDEM'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
-										FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-										FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-										FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
-										df_sinasc.STDNEPIDEM.alias('condition_source_value')).rdd, \
-										df_cond_occur_schema)
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.when(df_sinasc['STDNEPIDEM'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.STDNEPIDEM.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -531,14 +586,23 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.when(df_sinasc['TPAPRESENT'] == '1', 999999).FSql.when(df_sinasc['TPAPRESENT'] == '2', 999999).FSql.when(df_sinasc['TPAPRESENT'] == '3', 4218938).otherwise(999998).alias('condition_concept_id'), \
-										FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-										FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-										FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
-										df_sinasc.TPAPRESENT.alias('condition_source_value')).rdd, \
-										df_cond_occur_schema)
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.when(df_sinasc['TPAPRESENT'] == '1', 999999).when(df_sinasc['TPAPRESENT'] == '2', 999999).when(df_sinasc['TPAPRESENT'] == '3', 4218938).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.TPAPRESENT.alias('condition_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -563,14 +627,24 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.lit(1576063).cast(LongType()).alias('condition_concept_id'), \
-										FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-										FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-										FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
-										df_sinasc.SEMAGESTAC.alias('condition_source_value')).rdd, \
-										df_cond_occur_schema)
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(1576063).cast(LongType()).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.SEMAGESTAC.alias('condition_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -594,15 +668,24 @@ if sys.argv[1] == 'ETL':
 		#(df_condition_occur.identity, df_sinasc.identity, df_cid10.where(sqlLib.col('codigo_cid10').rlike('|'.join(replace(df_sinasc.codanomal,'.')))), makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.codanomal)""") # CODANOMAL	Código da anomalia (CID 10). a consulta ao dataframe do cid10 deve retornar o concept_id correspondente ao cid10 de entrada.
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
-		df_cond_occur=spark.createDataFrame(df_sinasc_cid10.select( \
-										FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
-										df_sinasc_cid10.person_id.alias('person_id'), \
-										df_sinasc_cid10.concept_id.alias('condition_concept_id'), \
-										FSql.FSql.to_date(FSql.lpad(df_sinasc_cid10.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-										FSql.FSql.to_date(FSql.lpad(df_sinasc_cid10.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-										FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
-										df_sinasc_cid10.CODANOMAL.alias('condition_source_value')).rdd, \
-										df_cond_occur_schema)
+		df_cond_occur=spark.createDataFrame(df_sinasc.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(999997).cast(LongType()).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.CODANOMAL.alias('condition_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -627,14 +710,24 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.lit(4072438).cast(LongType()).alias('condition_concept_id'), \
-										FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-										FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-										FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
-										df_sinasc.DTULTMENST.alias('condition_source_value')).rdd, \
-										df_cond_occur_schema)
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(4072438).cast(LongType()).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.DTULTMENST.alias('condition_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -659,20 +752,23 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.when(df_sinasc['GESTACAO'] == '1', 999999).\
-											FSql.when(df_sinasc['GESTACAO'] == '2', 999999).\
-											FSql.when(df_sinasc['GESTACAO'] == '3', 999999).\
-											FSql.when(df_sinasc['GESTACAO'] == '4', 999999).\
-											FSql.when(df_sinasc['GESTACAO'] == '5', 999999).\
-											FSql.when(df_sinasc['GESTACAO'] == '6', 999999).\
-											otherwise(999999).alias('condition_concept_id'), \
-										FSql.FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-										FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
-										df_sinasc.GESTACAO.alias('condition_source_value')).rdd, \
-										df_cond_occur_schema)
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(999996).cast(LongType()).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.GESTACAO.alias('condition_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -698,17 +794,24 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.when(df_sinasc['GRAVIDEZ'] == '1', 999999).\
-											FSql.when(df_sinasc['GRAVIDEZ'] == '2', 999999).\
-											FSql.when(df_sinasc['GRAVIDEZ'] == '3', 999999).\
-											otherwise(999999).alias('condition_concept_id'), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-										FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
-										df_sinasc.GRAVIDEZ.alias('condition_source_value')).rdd, \
-										df_cond_occur_schema)
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(999995).cast(LongType()).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.GRAVIDEZ.alias('condition_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -733,14 +836,23 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.lit(4313474).cast(LongType()).alias('condition_concept_id'), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-										FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
-										df_sinasc.CONSPRENAT.alias('condition_source_value')).rdd, \
-										df_cond_occur_schema)
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(4313474).cast(LongType()).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.CONSPRENAT.alias('condition_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -765,19 +877,23 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.when(df_sinasc['KOTELCHUCK'] == '1', 999999).\
-											FSql.when(df_sinasc['KOTELCHUCK'] == '2', 999999).\
-											FSql.when(df_sinasc['KOTELCHUCK'] == '3', 999999).\
-											FSql.when(df_sinasc['KOTELCHUCK'] == '4', 999999).\
-											FSql.when(df_sinasc['KOTELCHUCK'] == '5', 999999).\
-											otherwise(999999).alias('condition_concept_id'), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-										FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
-										df_sinasc.KOTELCHUCK.alias('condition_source_value')).rdd, \
-										df_cond_occur_schema)
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(999994).cast(LongType()).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.KOTELCHUCK.alias('condition_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -802,16 +918,24 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.when(df_sinasc['TPMETESTIM'] == '1', 999999).\
-											FSql.when(df_sinasc['TPMETESTIM'] == '2', 999999).\
-											otherwise(999999).alias('condition_concept_id'), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_start_date"), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("condition_end_date"), \
-										FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
-										df_sinasc.TPMETESTIM.alias('condition_source_value')).rdd, \
-										df_cond_occur_schema)
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(999993).cast(LongType()).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.TPMETESTIM.alias('condition_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
 
 		if df_cond_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -855,9 +979,18 @@ if sys.argv[1] == 'ETL':
 		StructField("person_id", LongType(), False), \
 		StructField("procedure_concept_id", LongType(), False), \
 		StructField("procedure_date", DateType(), False), \
+		StructField("procedure_timestamp", TimestampType(), True), \
 		StructField("procedure_end_date", DateType(), True), \
+		StructField("procedure_end_timestamp", TimestampType(), True), \
 		StructField("procedure_type_concept_id", LongType(), False), \
-		StructField("procedure_source_value", StringType(), True) \
+		StructField("modifier_concept_id", LongType(), True), \
+		StructField("quantity", IntegerType(), True), \
+		StructField("provider_id", LongType(), True), \
+		StructField("visit_occurrence_id",  LongType(), True), \
+		StructField("visit_detail_id",  LongType(), True), \
+		StructField("procedure_source_value", StringType(), True), \
+		StructField("procedure_source_concept_id", LongType(), True), \
+		StructField("modifier_source_value",  StringType(), True) \
 		])
 
 		# *************************************************************
@@ -871,16 +1004,23 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_proc_occur=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.when(df_sinasc['PARTO'] == '1', 999999).\
-										FSql.when(df_sinasc['PARTO'] == '2', 999999).\
-										otherwise(999998).alias('procedure_concept_id'), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
-										FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
-										df_sinasc.PARTO.alias('procedure_source_value')).rdd, \
-										df_proc_occur_schema)
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(999992).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.PARTO.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
 
 		if df_proc_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -906,17 +1046,23 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_proc_occur=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.when(df_sinasc['STTRABPART'] == '1', 4121586).\
-										FSql.when(df_sinasc['STTRABPART'] == '2', 999999).\
-										FSql.when(df_sinasc['STTRABPART'] == '3', 999999).\
-										otherwise(999998).alias('procedure_concept_id'), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
-										FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
-										df_sinasc.STTRABPART.alias('procedure_source_value')).rdd, \
-										df_proc_occur_schema)
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(999991).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.STTRABPART.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
 
 		if df_proc_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -942,18 +1088,23 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_proc_occur=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.when(df_sinasc['CONSULTAS'] == '1', 999999).\
-										FSql.when(df_sinasc['CONSULTAS'] == '2', 999999).\
-										FSql.when(df_sinasc['CONSULTAS'] == '3', 999999).\
-										FSql.when(df_sinasc['CONSULTAS'] == '4', 999999).\
-										otherwise(999998).alias('procedure_concept_id'), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
-										FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
-										df_sinasc.CONSULTAS.alias('procedure_source_value')).rdd, \
-										df_proc_occur_schema)
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(999990).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.CONSULTAS.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
 
 		if df_proc_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -979,14 +1130,23 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_proc_occur=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.lit(999999).cast(LongType()).alias('procedure_concept_id'), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
-										FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
-										df_sinasc.MESPRENAT.alias('procedure_source_value')).rdd, \
-										df_proc_occur_schema)
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(999989).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.MESPRENAT.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
 
 		if df_proc_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -1012,17 +1172,25 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_proc_occur=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.when(df_sinasc['STCESPARTO'] == '1', 999999).\
-										FSql.when(df_sinasc['STCESPARTO'] == '2', 999999).\
-										FSql.when(df_sinasc['STCESPARTO'] == '3', 999999).\
-										otherwise(999998).alias('procedure_concept_id'), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_date"), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("procedure_end_date"), \
-										FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
-										df_sinasc.STCESPARTO.alias('procedure_source_value')).rdd, \
-										df_proc_occur_schema)
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(999988).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.STCESPARTO.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
+
+
 		if df_proc_occur.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
 			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
@@ -1069,12 +1237,29 @@ if sys.argv[1] == 'ETL':
 		# *************************************************************
 		# Definindo o novo esquema para suportar valores nulos e não-nulos.
 		df_measurement_schema = StructType([ \
-		StructField("measurement_occurrence_id", LongType(), False), \
+		StructField("measurement_id", LongType(), False), \
 		StructField("person_id", LongType(), False), \
 		StructField("measurement_concept_id", LongType(), False), \
 		StructField("measurement_date", DateType(), False), \
 		StructField("measurement_type_concept_id", LongType(), False), \
-		StructField("measurement_source_value", StringType(), True) \
+		StructField("value_as_number", FloatType(), True), \
+		StructField("measurement_timestamp", TimestampType(), True), \
+		StructField("measurement_time", TimestampType(), True), \
+		StructField("operator_concept_id", LongType(), True), \
+		StructField("value_as_concept_id", LongType(), True), \
+		StructField("unit_concept_id", LongType(), True), \
+		StructField("range_low", FloatType(), True), \
+		StructField("range_high", FloatType(), True), \
+		StructField("provider_id", LongType(), True), \
+		StructField("visit_occurrence_id", LongType(), True), \
+		StructField("visit_detail_id", LongType(), True), \
+		StructField("measurement_source_value", StringType(), True), \
+		StructField("measurement_source_concept_id", LongType(), True), \
+		StructField("unit_source_value", StringType(), True), \
+		StructField("unit_source_concept_id", LongType(), True), \
+		StructField("value_source_value", StringType(), True), \
+		StructField("measurement_event_id", LongType(), True), \
+		StructField("meas_event_field_concept_id", LongType(), True) \
 		])
 
 		# *************************************************************
@@ -1088,13 +1273,30 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_measurement=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('measurement_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.lit(9999999).cast(LongType()).alias('measurement_concept_id'), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
-										FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
-										df_sinasc.TPROBSON.alias('measurement_source_value')).rdd, \
-										df_measurement_schema)
+		FSql.lit(0).cast(LongType()).alias('measurement_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(9999987).cast(LongType()).alias('measurement_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias('measurement_date'), \
+		FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
+		FSql.lit(None).cast(FloatType()).alias('value_as_number'), \
+		FSql.lit(None).cast(TimestampType()).alias('measurement_timestamp'), \
+		FSql.lit(None).cast(TimestampType()).alias('measurement_time'), \
+		FSql.lit(None).cast(LongType()).alias('operator_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('value_as_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('unit_concept_id'), \
+		FSql.lit(None).cast(FloatType()).alias('range_low'), \
+		FSql.lit(None).cast(FloatType()).alias('range_high'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.TPROBSON.alias('measurement_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('measurement_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('unit_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('unit_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('value_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('measurement_event_id'), \
+		FSql.lit(None).cast(LongType()).alias('meas_event_field_concept_id') \
+		).rdd, df_measurement_schema)
 
 		if df_measurement.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -1120,13 +1322,30 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_measurement=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('measurement_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.lit(4014304).cast(LongType()).alias('measurement_concept_id'), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
-										FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
-										df_sinasc.APGAR1.alias('measurement_source_value')).rdd, \
-										df_measurement_schema)
+		FSql.lit(0).cast(LongType()).alias('measurement_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(4014304).cast(LongType()).alias('measurement_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias('measurement_date'), \
+		FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
+		FSql.lit(None).cast(FloatType()).alias('value_as_number'), \
+		FSql.lit(None).cast(TimestampType()).alias('measurement_timestamp'), \
+		FSql.lit(None).cast(TimestampType()).alias('measurement_time'), \
+		FSql.lit(None).cast(LongType()).alias('operator_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('value_as_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('unit_concept_id'), \
+		FSql.lit(None).cast(FloatType()).alias('range_low'), \
+		FSql.lit(None).cast(FloatType()).alias('range_high'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.APGAR1.alias('measurement_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('measurement_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('unit_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('unit_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('value_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('measurement_event_id'), \
+		FSql.lit(None).cast(LongType()).alias('meas_event_field_concept_id') \
+		).rdd, df_measurement_schema)
 
 		if df_measurement.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -1152,13 +1371,31 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_measurement=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('measurement_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.lit(4016464).cast(LongType()).alias('measurement_concept_id'), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
-										FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
-										df_sinasc.APGAR5.alias('measurement_source_value')).rdd, \
-										df_measurement_schema)
+		FSql.lit(0).cast(LongType()).alias('measurement_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(4016464).cast(LongType()).alias('measurement_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias('measurement_date'), \
+		FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
+		FSql.lit(None).cast(FloatType()).alias('value_as_number'), \
+		FSql.lit(None).cast(TimestampType()).alias('measurement_timestamp'), \
+		FSql.lit(None).cast(TimestampType()).alias('measurement_time'), \
+		FSql.lit(None).cast(LongType()).alias('operator_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('value_as_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('unit_concept_id'), \
+		FSql.lit(None).cast(FloatType()).alias('range_low'), \
+		FSql.lit(None).cast(FloatType()).alias('range_high'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.APGAR5.alias('measurement_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('measurement_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('unit_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('unit_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('value_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('measurement_event_id'), \
+		FSql.lit(None).cast(LongType()).alias('meas_event_field_concept_id') \
+		).rdd, df_measurement_schema)
+
 
 		if df_measurement.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -1238,9 +1475,24 @@ if sys.argv[1] == 'ETL':
 		StructField("observation_id", LongType(), False), \
 		StructField("person_id", LongType(), False), \
 		StructField("observation_concept_id", LongType(), False), \
-		StructField("observation_date", DateType(), False), \
+		StructField("observation_date", TimestampType(), False), \
+		StructField("observation_timestamp", TimestampType(), True), \
 		StructField("observation_type_concept_id", LongType(), False), \
-		StructField("observation_source_value", StringType(), True) \
+		StructField("value_as_number", FloatType(), True), \
+		StructField("value_source_value", StringType(), True), \
+		StructField("value_as_string", StringType(), True), \
+		StructField("value_as_concept_id", LongType(), True), \
+		StructField("qualifier_concept_id", LongType(), True), \
+		StructField("unit_concept_id", LongType(), True), \
+		StructField("provider_id", LongType(), True), \
+		StructField("visit_occurrence_id", LongType(), True), \
+		StructField("visit_detail_id", LongType(), True), \
+		StructField("observation_source_value", StringType(), True), \
+		StructField("observation_source_concept_id", LongType(), True), \
+		StructField("unit_source_value", StringType(), True), \
+		StructField("qualifier_source_value", StringType(), True), \
+		StructField("observation_event_id", LongType(), True), \
+		StructField("obs_event_field_concept_id", LongType(), True)	\
 		])
 
 		# *************************************************************
@@ -1254,13 +1506,28 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_observation=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('observation_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.lit(9999999).cast(LongType()).alias('observation_concept_id'), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("observation_date"), \
-										FSql.lit(32848).cast(LongType()).alias('observation_type_concept_id'), \
-										df_sinasc.PARIDADE.alias('observation_source_value')).rdd, \
-										df_observation_schema)
+		FSql.lit(0).cast(LongType()).alias('observation_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(9999986).cast(LongType()).alias('observation_concept_id'), \
+		FSql.to_timestamp(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias('observation_date'), \
+		FSql.lit(None).cast(TimestampType()).alias('observation_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('observation_type_concept_id'), \
+		FSql.lit(None).cast(FloatType()).alias('value_as_number'), \
+		FSql.lit(None).cast(StringType()).alias('value_source_value'), \
+		FSql.lit(None).cast(StringType()).alias('value_as_string'), \
+		FSql.lit(None).cast(LongType()).alias('value_as_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('qualifier_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('unit_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.PARIDADE.alias('observation_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('observation_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('unit_source_value'), \
+		FSql.lit(None).cast(StringType()).alias('qualifier_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('observation_event_id'), \
+		FSql.lit(None).cast(LongType()).alias('obs_event_field_concept_id'), \
+		).rdd, df_observation_schema)
 
 		if df_observation.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
@@ -1335,24 +1602,30 @@ if sys.argv[1] == 'ETL':
 		df_datasus_person_schema = StructType([ \
 		StructField("person_id", LongType(), False), \
 		StructField("system_source_id", IntegerType(), False), \
-		StructField("mother_birth_date_source_value", IntegerType(), True), \
+		StructField("mother_birth_date_source_value", StringType(), True), \
 		StructField("mother_birth_date", DateType(), True), \
-		StructField("mother_years_of_study", IntegerType(), True), \
-		StructField("mother_education_level", IntegerType(), True), \
-		StructField("mother_education_level_aggregated", IntegerType(), True), \
-		StructField("mother_marital_status", IntegerType(), True), \
+		StructField("mother_years_of_study", StringType(), True), \
+		StructField("mother_education_level", StringType(), True), \
+		StructField("mother_education_level_aggregated", StringType(), True), \
+		StructField("mother_marital_status", StringType(), True), \
 		StructField("mother_age", IntegerType(), True), \
 		StructField("mother_city_of_birth", IntegerType(), True), \
 		StructField("mother_state_of_birth", IntegerType(), True), \
-		StructField("mother_race", IntegerType(), True), \
+		StructField("mother_race", StringType(), True), \
 		StructField("mother_elementary_school", IntegerType(), True), \
 		StructField("father_age", IntegerType(), True), \
 		StructField("responsible_document_type", IntegerType(), True), \
 		StructField("responsible_role_type", IntegerType(), True), \
-		StructField("place_of_birth_type_source_value", IntegerType(), True), \
-		StructField("care_site_of_birth_source_value", IntegerType(), True)\
+		StructField("place_of_birth_type_source_value", StringType(), True), \
+		StructField("care_site_of_birth_source_value", IntegerType(), True), \
+		StructField("mother_professional_occupation", StringType(), True), \
+		StructField("mother_country_of_origin", IntegerType(), True), \
+		StructField("number_of_dead_children", IntegerType(), True), \
+		StructField("number_of_living_children", IntegerType(), True), \
+		StructField("number_of_previous_pregnancies", IntegerType(), True), \
+		StructField("number_of_previous_cesareans", IntegerType(), True), \
+		StructField("number_of_previous_normal_born", IntegerType(), True) \
 		])
-
 
 		# *************************************************************
 		#  DATASUS_PERSON - Persistência dos dados 
@@ -1362,43 +1635,42 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_datasus_person=spark.createDataFrame(df_sinasc.select( \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.lit(1).cast(IntegerType()).alias('system_source_id'), \
-										df_sinasc.DTNASCMAE.alias('mother_birth_date_source_value'), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASCMAE,8,'0'), 'ddMMyyyy').alias('mother_birth_date'), \
-										df_sinasc.ESCMAE.alias('mother_years_of_study'), \
-										df_sinasc.ESCMAE2010.alias('mother_education_level'), \
-										df_sinasc.ESCMAEAGR1.alias('mother_education_level_aggregated'), \
-										df_sinasc.ESTCIVMAE.alias('mother_marital_status'), \
-										df_sinasc.IDADEMAE.alias('mother_age'), \
-										df_sinasc.CODMUNNATU.alias('mother_city_of_birth'), \
-										df_sinasc.CODUFNATU.alias('mother_state_of_birth'), \
-										df_sinasc.RACACORMAE.alias('mother_race'), \
-										df_sinasc.SERIESCMAE.alias('mother_elementary_school'), \
-										df_sinasc.IDADEPAI.alias('father_age'), \
-										df_sinasc.TPDOCRESP.alias('responsible_document_type'), \
-										df_sinasc.TPFUNCRESP.alias('responsible_role_type'), \
-										df_sinasc.LOCNASC.alias('place_of_birth_type_source_value'), \
-										df_sinasc.CODESTAB.alias('care_site_of_birth_source_value'), \
-										df_sinasc.CODOCUPMAE.alias('mother_professional_occupation'), \
-										df_sinasc.NATURALMAE.alias('mother_country_of_origin'), \
-										df_sinasc.QTDFILMORT.alias('number_of_dead_children'), \
-										df_sinasc.QTDFILVIVO.alias('number_of_living_children'), \
-										df_sinasc.QTDGESTANT.alias('number_of_previous_pregnancies'), \
-										df_sinasc.QTDPARTCES.alias('number_of_previous_cesareans'), \
-										df_sinasc.QTDPARTNOR.alias('number_of_previous_normal_born')).rdd, \
-										df_datasus_person_schema)
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(1).cast(IntegerType()).alias('system_source_id'), \
+		df_sinasc.DTNASCMAE.alias('mother_birth_date_source_value'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASCMAE,10,'0'), 'yyyy-MM-dd').alias('mother_birth_date'), \
+		df_sinasc.ESCMAE.alias('mother_years_of_study'), \
+		df_sinasc.ESCMAE2010.alias('mother_education_level'), \
+		df_sinasc.ESCMAEAGR1.alias('mother_education_level_aggregated'), \
+		df_sinasc.ESTCIVMAE.alias('mother_marital_status'), \
+		df_sinasc.IDADEMAE.cast(IntegerType()).alias('mother_age'), \
+		df_sinasc.CODMUNNATU.cast(IntegerType()).alias('mother_city_of_birth'), \
+		df_sinasc.CODUFNATU.cast(IntegerType()).alias('mother_state_of_birth'), \
+		df_sinasc.RACACORMAE.alias('mother_race'), \
+		df_sinasc.SERIESCMAE.cast(IntegerType()).alias('mother_elementary_school'), \
+		df_sinasc.IDADEPAI.cast(IntegerType()).alias('father_age'), \
+		df_sinasc.TPDOCRESP.cast(IntegerType()).alias('responsible_document_type'), \
+		df_sinasc.TPFUNCRESP.cast(IntegerType()).alias('responsible_role_type'), \
+		df_sinasc.LOCNASC.alias('place_of_birth_type_source_value'), \
+		df_sinasc.CODESTAB.cast(IntegerType()).alias('care_site_of_birth_source_value'), \
+		df_sinasc.CODOCUPMAE.alias('mother_professional_occupation'), \
+		df_sinasc.NATURALMAE.cast(IntegerType()).alias('mother_country_of_origin'), \
+		df_sinasc.QTDFILMORT.cast(IntegerType()).alias('number_of_dead_children'), \
+		df_sinasc.QTDFILVIVO.cast(IntegerType()).alias('number_of_living_children'), \
+		df_sinasc.QTDGESTANT.cast(IntegerType()).alias('number_of_previous_pregnancies'), \
+		df_sinasc.QTDPARTCES.cast(IntegerType()).alias('number_of_previous_cesareans'), \
+		df_sinasc.QTDPARTNOR.cast(IntegerType()).alias('number_of_previous_normal_born') \
+		).rdd, df_datasus_person_schema)
 
 		# persistindo os dados de observation_period no banco.
 		if df_datasus_person.count() > 0:
 			df_datasus_person.writeTo("bios.rebios.datasus_person").append()
 
-
 		logger.info("ETL execution finished with success. Please, check the log file.")
 		# return success
 		sys.exit(0)
 	except Exception as e:
-		logger.error("Error while writing data to OMOP Vocabulary: ", str(e))
+		logger.error(f"Fatal error while loading data from SINASC: {str(e)}")
 		#return failure
 		sys.exit(-1)
  
