@@ -562,7 +562,7 @@ class Assist(object):
 
   def get_view_names(self, database, view_names=[]):
     try:
-      return self.db.get_view_names(database)
+      return [] #self.db.get_view_names(database)
     except NotImplementedError:
       return []
 
