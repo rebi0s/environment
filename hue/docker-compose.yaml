@@ -1,8 +1,11 @@
 version: "3.7"
 services:
     hue:
+        build:
+            context: .
+            dockerfile: hue.dockerfile
         platform: linux/amd64
-        image: gethue/hue:latest
+#        image: gethue/hue:latest
         container_name: hue_server
         ports:
             - "8888:8888"
