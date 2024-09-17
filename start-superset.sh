@@ -1,2 +1,2 @@
-docker compose -f ../superset/docker-compose.yml                                                                                                                                                                                                                 down | true
-docker compose -f ../superset/docker-compose.yml up -d $1
+docker compose -f ./superset/docker-compose.yaml                                                                                                                                                                                                                 down | true
+docker compose -f ./superset/docker-compose.yaml up -d $1
