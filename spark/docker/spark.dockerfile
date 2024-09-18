@@ -96,9 +96,6 @@ ENV DEPENDENCIES="org.postgresql:postgresql:42.6.0\
 ,org.slf4j:slf4j-simple:2.0.7"\
     AWS_SDK_VERSION=2.20.120 \
     AWS_MAVEN_GROUP=software.amazon.awssdk \
-    AWS_ACCESS_KEY_ID=admin \
-    AWS_SECRET_ACCESS_KEY=Eqcu3%#Gq6NV \
-    AWS_REGION=us-east-1 \
     IP=127.0.0.1 \
     PORT=10000
 
