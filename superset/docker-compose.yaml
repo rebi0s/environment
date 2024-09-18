@@ -1,0 +1,94 @@
+x-superset-volumes: &superset-volumes
+    - ./docker:/app/docker
+    - superset_home:/app/superset_home
+x-common-build: &common-build
+    context: .
+    dockerfile: ./docker/superset.dockerfile
+
+version: "3.7"
+services:
+    redis:
+        image: redis:7
+        container_name: superset_cache
+        restart: unless-stopped
+        volumes:
+            - redis:/data
+        extra_hosts:
+            - host.docker.internal:host-gateway
+
+    superset:
+        build:
+            <<: *common-build
+        depends_on:
+            - redis
+        env_file:
+          - docker/.env
+        container_name: superset_app
+        command: ["/app/docker/docker-bootstrap.sh", "app-gunicorn"]
+        user: "root"
+        restart: unless-stopped
+        ports:
+            - "8088:8088"
+        volumes: *superset-volumes
+        extra_hosts:
+            - host.docker.internal:host-gateway
+
+    superset-init:
+        container_name: superset_init
+        build:
+          <<: *common-build
+        command: ["/app/docker/docker-init.sh"]
+        env_file:
+          - docker/.env
+        depends_on:
+            - redis
+        user: "root"
+        volumes: *superset-volumes
+        healthcheck:
+          disable: true
+        extra_hosts:
+          - host.docker.internal:host-gateway
+
+    superset-worker:
+        build:
+          <<: *common-build
+        container_name: superset_worker
+        command: ["/app/docker/docker-bootstrap.sh", "worker"]
+        env_file:
+          - docker/.env
+        restart: unless-stopped
+        depends_on:
+            - redis
+        user: "root"
+        volumes: *superset-volumes
+        healthcheck:
+          test:
+            [
+              "CMD-SHELL",
+              "celery -A superset.tasks.celery_app:app inspect ping -d celery@$$HOSTNAME",
+            ]
+        extra_hosts:
+          - host.docker.internal:host-gateway
+
+    superset-worker-beat:
+        build:
+          <<: *common-build
+        container_name: superset_worker_beat
+        command: ["/app/docker/docker-bootstrap.sh", "beat"]
+        env_file:
+          - docker/.env
+        restart: unless-stopped
+        depends_on:
+            - redis
+        user: "root"
+        volumes: *superset-volumes
+        healthcheck:
+          disable: true
+        extra_hosts:
+          - host.docker.internal:host-gateway
+
+volumes:
+  superset_home:
+    external: false
+  redis:
+    external: false

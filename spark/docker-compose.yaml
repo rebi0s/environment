@@ -21,6 +21,8 @@ services:
             - SPARK_WORKLOAD=master
         extra_hosts:
             - host.docker.internal:host-gateway
+        env_file:
+          - docker/.env
 
     spark-worker-a:
         container_name: spark_worker_a
@@ -48,6 +50,8 @@ services:
             - ../../spark/spark-worker-a/data:/opt/spark-data
             - ../../spark/spark-worker-a/logs:/opt/spark/logs
             - ../../spark/spark-worker-a/spark-events:/workspace/spark-events
+        env_file:
+          - docker/.env
     spark-worker-b:
         container_name: spark_worker_b
         build:
@@ -74,3 +78,5 @@ services:
             - ../../spark/spark-worker-b/data:/opt/spark-data
             - ../../spark/spark-worker-b/logs:/opt/spark/logs
             - ../../spark/spark-worker-b/spark-events:/workspace/spark-events
+        env_file:
+          - docker/.env

@@ -23,16 +23,16 @@ ENV SPARK_VERSION=3.4.0 \
     SPARK_HOME=/opt/spark \
     PYTHONHASHSEED=1
 
-RUN wget --no-verbose -O apache-spark.tgz "https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala${SCALA_VERSION}.tgz" \
-    && wget https://mirrors.estointernet.in/apache/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz \
-    && tar -xvf apache-maven-3.6.3-bin.tar.gz \
-    && mv apache-maven-3.6.3 /opt/ \
-    && mkdir -p /opt/spark \
-    && tar -xf apache-spark.tgz -C /opt/spark --strip-components=1 \
-    && rm apache-spark.tgz
+RUN wget -O apache-spark.tgz "https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}-scala${SCALA_VERSION}.tgz"
+RUN wget https://dlcdn.apache.org/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz
+RUN tar -xvf apache-maven-3.9.9-bin.tar.gz
+RUN mv apache-maven-3.9.9 /opt/
+RUN mkdir -p /opt/spark
+RUN tar -xf apache-spark.tgz -C /opt/spark --strip-components=1
+RUN rm apache-spark.tgz
 
-ENV M2_HOME='/opt/apache-maven-3.6.3' \
-    PATH="/opt/apache-maven-3.6.3/bin:$PATH"
+ENV M2_HOME='/opt/apache-maven-3.9.9' \
+    PATH="/opt/apache-maven-3.9.9/bin:$PATH"
 
 
 #############
@@ -96,9 +96,6 @@ ENV DEPENDENCIES="org.postgresql:postgresql:42.6.0\
 ,org.slf4j:slf4j-simple:2.0.7"\
     AWS_SDK_VERSION=2.20.120 \
     AWS_MAVEN_GROUP=software.amazon.awssdk \
-    AWS_ACCESS_KEY_ID=admin \
-    AWS_SECRET_ACCESS_KEY=Eqcu3%#Gq6NV \
-    AWS_REGION=us-east-1 \
     IP=127.0.0.1 \
     PORT=10000
 
@@ -110,4 +107,4 @@ COPY run-maven.sh /
 RUN chmod +x /run-maven.sh
 RUN chmod +x /start-spark-sql.sh
 
-CMD ["/bin/bash", "/run-maven.sh"]
+# CMD ["/bin/bash", "/run-maven.sh"]
