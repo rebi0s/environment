@@ -24,9 +24,9 @@ def initSpark():
         .set("spark.sql.catalog.bios.jdbc.user", "icbergcat")
         .set("spark.sql.catalog.bios.jdbc.password", "hNXz35UBRcAC")
         .set("spark.sql.catalog.bios.jdbc.schema-version", "V1")
-        .set("spark.sql.catalog.bios.warehouse", os.getenv("CTRNA_CATALOG_WAREHOUSE", "s3a://bios/"))
+        .set("spark.sql.catalog.bios.warehouse", "s3a://rebios-test-env/")
         .set("spark.sql.catalog.bios.io-impl", "org.apache.iceberg.aws.s3.S3FileIO")
-        .set("spark.sql.catalog.bios.s3.endpoint", os.getenv("CTRNA_CATALOG_S3_ENDPOINT","http://172.17.0.1:9000"))
+        .set("spark.sql.catalog.bios.s3.endpoint", "https://s3.amazonaws.com/")
         .set("spark.sql.catalog.spark_catalog","org.apache.iceberg.spark.SparkSessionCatalog")
         .set("spark.sql.catalogImplementation", "in-memory")
         .set("spark.sql.defaultCatalog", os.getenv("CTRNA_CATALOG_DEFAULT","bios")) # Name of the Iceberg catalog

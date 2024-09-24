@@ -480,7 +480,7 @@ def loadLocationCityRebios(file_path: str, file_name: str, spark: SparkSession, 
     StructField("address_1", StringType(), True), \
     StructField("address_2", StringType(), True), \
     StructField("zip", StringType(), True) \
-   ])
+    ])
 
 #    df_source = pd.read_excel(os.path.join(file_path, file_name))
 #    df_input = spark.createDataFrame(df_source)
@@ -488,25 +488,28 @@ def loadLocationCityRebios(file_path: str, file_name: str, spark: SparkSession, 
     df_load = spark.read.csv(os.path.join(file_path, file_name), sep=";", header=True, inferSchema=True)
 
     df_load = df_load.withColumn("COD_UF", FSql.substring("geocodigo", 1, 2))
-
+    
     df_load = (df_load.join(df_states, [df_load.COD_UF == df_states.codigo_uf], 'inner'))
+    
+    df_load = df_load.withColumn("Latitude", FSql.regexp_replace("Latitude", "," , "."))
+    df_load = df_load.withColumn("Longitude", FSql.regexp_replace("Longitude", "," , "."))
 
     if df_load.count() > 0:
         df_location = spark.createDataFrame(df_load.select(\
-                            FSql.lit(0).cast(LongType()).alias('location_id'), \
-                            df_load.nome.alias('city'), \
-                            df_load.nome_uf.alias('state'), \
-                            df_load.codigo_uf.cast(StringType()).alias('county'), \
-                            df_load.geocodigo.alias('location_source_value'), \
-                            FSql.lit(4075645).cast(LongType()).alias('country_concept_id'), \
-                            FSql.lit('Brasil').alias('country_source_value'), \
-                            df_load.Latitude.cast(FloatType()).alias('latitude'), \
-                            df_load.Longitude.cast(FloatType()).alias('longitude'), \
-                            FSql.lit(None).cast(StringType()).alias('address_1'), \
-                            FSql.lit(None).cast(StringType()).alias('address_2'), \
-                            FSql.lit(None).cast(StringType()).alias('zip') \
-                            ).rdd, \
-                            df_load_schema)
+        FSql.lit(0).cast(LongType()).alias('location_id'), \
+        df_load.nome.alias('city'), \
+        FSql.lit(None).cast(StringType()).alias('state'), \
+        FSql.lit(None).cast(StringType()).alias('county'), \
+        df_load.geocodigo.alias('location_source_value'), \
+        FSql.lit(4075645).cast(LongType()).alias('country_concept_id'), \
+        FSql.lit('Brasil').alias('country_source_value'), \
+        df_load.Latitude.cast(FloatType()).alias('latitude'), \
+        df_load.Longitude.cast(FloatType()).alias('longitude'), \
+        FSql.lit(None).cast(StringType()).alias('address_1'), \
+        FSql.lit(None).cast(StringType()).alias('address_2'), \
+        FSql.lit(None).cast(StringType()).alias('zip') \
+        ).rdd, \
+        df_load_schema)
         
         if df_location.count() > 0:
             #obtem o max da tabela para usar na inserção de novos registros

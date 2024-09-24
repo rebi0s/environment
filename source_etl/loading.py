@@ -64,7 +64,7 @@ if sys.argv[1] == 'INIT':
 	try:
 		logger.info("Starting the database initialization. All data will be removed and tables re-created.")
 		if num_args != 3:
-			logger.error("Check the command line usage. For INIT profile, is required 1 parameter. Usage: submit-spark loading.py INIT /path/filename.sql")
+			logger.error("Check the command line usage. For INIT profile, is required 1 parameter. Usage: spark-submit loading.py INIT /path/filename.sql")
 			sys.exit(-1)
 		execute_sql_commands_from_file(spark, sys.argv[2], logger)
 		logger.info(f"INIT Profile executed with filename: {sys.argv[2]}")
@@ -76,7 +76,7 @@ if sys.argv[1] == 'INIT':
 if sys.argv[1] == 'VOCAB_OMOP':
 	try:
 		if num_args != 3:
-			logger.error("Check the command line usage. For VOCAB_OMOP profile, 1 parameter is required. Usage: submit-spark loading.py VOCAB_OMOP /path_to_csv_files")
+			logger.error("Check the command line usage. For VOCAB_OMOP profile, 1 parameter is required. Usage: spark-submit loading.py VOCAB_OMOP /path_to_csv_files")
 			sys.exit(-1)
 		logger.info("Initiating OMOP Vocabulary loading.")
 		for filename in os.listdir(sys.argv[2]):
@@ -106,9 +106,9 @@ if sys.argv[1] == 'VOCAB_OMOP':
 
 #*************************
 # usage:
-#  submit-spark loading.py DATASUS -city /path_to_folder_with_cities
-#  submit-spark loading.py DATASUS -care /path_to_folder_with_care_sites
-#  submit-spark loading.py DATASUS -idc10 /path_to_folder_with_icd10
+#  spark-submit loading.py DATASUS -city /path_to_folder_with_cities
+#  spark-submit loading.py DATASUS -care /path_to_folder_with_care_sites
+#  spark-submit loading.py DATASUS -idc10 /path_to_folder_with_icd10
 #  
 #*************************
 
@@ -117,9 +117,9 @@ if sys.argv[1] == 'DATASUS':
 		if num_args != 5:
 			logger.error("Check the command line usage. For DATASUS the options are as below.")
 			logger.error("Usage: ")
-			logger.error("   submit-spark loading.py DATASUS -city /path_to_folder_with_cities file_name_with_cities")
-			logger.error("   submit-spark loading.py DATASUS -care /path_to_folder_with_care_sites file_name_with_care_sites")
-			logger.error("   submit-spark loading.py DATASUS -idc10 /path_to_folder_with_icd10")
+			logger.error("   spark-submit loading.py DATASUS -city /path_to_folder_with_cities file_name_with_cities")
+			logger.error("   spark-submit loading.py DATASUS -care /path_to_folder_with_care_sites file_name_with_care_sites")
+			logger.error("   spark-submit loading.py DATASUS -idc10 /path_to_folder_with_icd10")
 			sys.exit(-1)
 
 		logger.info("Loading external data from DATASUS to OMOP database.")
@@ -158,7 +158,7 @@ if sys.argv[1] == 'ETL':
 		if num_args != 4:
 			logger.error("Check the command line usage. For ETL the options are as below.")
 			logger.error("Usage: ")
-			logger.error("   submit-spark loading.py ETL /path_to_folder_with_source_file source_file_name")
+			logger.error("   spark-submit loading.py ETL /path_to_folder_with_source_file source_file_name")
 			sys.exit(-1)
 
 		logger.info("Initiating ETL processing from source files to OMOP database.")
@@ -1090,7 +1090,7 @@ if sys.argv[1] == 'ETL':
 		df_proc_occur=spark.createDataFrame(df_sinasc.select( \
 		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
-		FSql.lit(999990).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.lit(4313474).cast(LongType()).alias('procedure_concept_id'), \
 		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
 		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_end_date"), \
@@ -1421,13 +1421,31 @@ if sys.argv[1] == 'ETL':
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
 		df_measurement=spark.createDataFrame(df_sinasc.select( \
-										FSql.lit(0).cast(LongType()).alias('measurement_id'), \
-										df_sinasc.person_id.alias('person_id'), \
-										FSql.lit(4264825).cast(LongType()).alias('measurement_concept_id'), \
-										FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'ddMMyyyy').alias("measurement_date"), \
-										FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
-										df_sinasc.PESO.alias('measurement_source_value')).rdd, \
-										df_measurement_schema)
+		FSql.lit(0).cast(LongType()).alias('measurement_id'), \
+		df_sinasc.person_id.alias('person_id'), \
+		FSql.lit(4264825).cast(LongType()).alias('measurement_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias('measurement_date'), \
+		FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
+		FSql.lit(None).cast(FloatType()).alias('value_as_number'), \
+		FSql.lit(None).cast(TimestampType()).alias('measurement_timestamp'), \
+		FSql.lit(None).cast(TimestampType()).alias('measurement_time'), \
+		FSql.lit(None).cast(LongType()).alias('operator_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('value_as_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('unit_concept_id'), \
+		FSql.lit(None).cast(FloatType()).alias('range_low'), \
+		FSql.lit(None).cast(FloatType()).alias('range_high'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sinasc.PESO.alias('measurement_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('measurement_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('unit_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('unit_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('value_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('measurement_event_id'), \
+		FSql.lit(None).cast(LongType()).alias('meas_event_field_concept_id') \
+		).rdd, df_measurement_schema)
+
 		if df_measurement.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
 			count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.rebios.measurement")
@@ -1679,7 +1697,7 @@ if sys.argv[1] == 'CLIMATE':
 		if num_args != 4:
 			logger.error("Check the command line usage. For CLIMATE the options are as below.")
 			logger.error("Usage: ")
-			logger.error("   submit-spark loading.py CLIMATE /path_to_folder_with_climate_data file_name_with_climate_data")
+			logger.error("   spark-submit loading.py CLIMATE /path_to_folder_with_climate_data file_name_with_climate_data")
 			sys.exit(-1)
 
 		logger.info("Loading external data from CLIMATE to Climaterna database.")
