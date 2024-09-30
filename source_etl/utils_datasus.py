@@ -498,8 +498,8 @@ def loadLocationCityRebios(file_path: str, file_name: str, spark: SparkSession, 
         df_location = spark.createDataFrame(df_load.select(\
         FSql.lit(0).cast(LongType()).alias('location_id'), \
         df_load.nome.alias('city'), \
-        FSql.lit(None).cast(StringType()).alias('state'), \
-        FSql.lit(None).cast(StringType()).alias('county'), \
+        df_load.nome_uf.alias('state'), \
+        df_load.codigo_uf.cast(StringType()).alias('county'), \
         df_load.geocodigo.alias('location_source_value'), \
         FSql.lit(4075645).cast(LongType()).alias('country_concept_id'), \
         FSql.lit('Brasil').alias('country_source_value'), \
