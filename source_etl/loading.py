@@ -54,7 +54,7 @@ if num_args == 1:
 	logger.error("Check the command line usage. A profile with parameters has to be provided. The available choices are: INIT, VOCAB_OMOP, DATASUS, VOCAB_CTRNA, ETL.")
 	sys.exit(-1)
 
-profiles = ['INIT','VOCAB_OMOP','DATASUS','VOCAB_CTRNA', 'ETL']
+profiles = ['INIT','VOCAB_OMOP','DATASUS','VOCAB_CTRNA', 'ETL', 'CLIMATE']
 
 if sys.argv[1] not in profiles:
 	logger.error("Check the command line usage. A profile not valid was used to invoke the script. The available choices are: INIT, VOCAB_OMOP, DATASUS, VOCAB_CTRNA, ETL.")
@@ -1704,46 +1704,95 @@ if sys.argv[1] == 'CLIMATE':
 
 		df_climate = spark.read.parquet(os.path.join(sys.argv[2], sys.argv[3]))
 
+		#if any(field.name == "name_state" for field in df_climate.schema.fields):
 		df_climate_schema = StructType([ \
-		StructField("code_muni", StringType(), True), \
-		StructField("name_muni", StringType(), True), \
-		StructField("code_state", StringType(), True), \
-		StructField("abbrev_state", StringType(), True), \
-		StructField("name_state", StringType(), True), \
-		StructField("code_region", FloatType(), True), \
-		StructField("name_region", StringType(), True), \
-		StructField("date", StringType(), True), \
-		StructField("TMIN_mean", FloatType(), True), \
-		StructField("TMIN_min", FloatType(), True), \
-		StructField("TMIN_max", FloatType(), True), \
-		StructField("TMIN_stdev", FloatType(), True), \
-		StructField("TMAX_mean", FloatType(), True), \
-		StructField("TMAX_min", FloatType(), True), \
-		StructField("TMAX_max", FloatType(), True), \
-		StructField("TMAX_stdev", FloatType(), True), \
-		StructField("PR_mean", FloatType(), True), \
-		StructField("PR_min", FloatType(), True), \
-		StructField("PR_max", FloatType(), True), \
-		StructField("PR_stdev", FloatType(), True), \
-		StructField("PR_sum", FloatType(), True), \
-		StructField("ETo_mean", FloatType(), True), \
-		StructField("ETo_min", FloatType(), True), \
-		StructField("ETo_max", FloatType(), True), \
-		StructField("ETo_stdev", FloatType(), True), \
-		StructField("ETo_sum", FloatType(), True), \
-		StructField("RH_mean", FloatType(), True), \
-		StructField("RH_min", FloatType(), True), \
-		StructField("RH_max", FloatType(), True), \
-		StructField("RH_stdev", FloatType(), True), \
-		StructField("Rs_mean", FloatType(), True), \
-		StructField("Rs_min", FloatType(), True), \
-		StructField("Rs_max", FloatType(), True), \
-		StructField("Rs_stdev", FloatType(), True), \
-		StructField("u2_mean", FloatType(), True), \
-		StructField("u2_min", FloatType(), True), \
-		StructField("u2_max", FloatType(), True), \
-		StructField("u2_stdev", FloatType(), True) \
+		StructField("city_code", StringType(), True), \
+		StructField("city_name", StringType(), True), \
+		StructField("state_code", StringType(), True), \
+		StructField("state_abbreviation", StringType(), True), \
+		StructField("state_name", StringType(), True), \
+		StructField("region_code", FloatType(), True), \
+		StructField("region_name", StringType(), True), \
+		StructField("measurement_date", StringType(), True), \
+		StructField("temperature_min_mean_value", FloatType(), True), \
+		StructField("temperature_min_min_value", FloatType(), True), \
+		StructField("temperature_min_max_value", FloatType(), True), \
+		StructField("temperature_min_stdev_value", FloatType(), True), \
+		StructField("temperature_min_sum_value", FloatType(), True), \
+		StructField("temperature_max_mean_value", FloatType(), True), \
+		StructField("temperature_max_min_value", FloatType(), True), \
+		StructField("temperature_max_max_value", FloatType(), True), \
+		StructField("temperature_max_stdev_value", FloatType(), True), \
+		StructField("temperature_max_sum_value", FloatType(), True), \
+		StructField("precipitation_mean_value", FloatType(), True), \
+		StructField("precipitation_min_value", FloatType(), True), \
+		StructField("precipitation_max_value", FloatType(), True), \
+		StructField("precipitation_stdev_value", FloatType(), True), \
+		StructField("precipitation_sum_value", FloatType(), True), \
+		StructField("relative_humidity_mean_value", FloatType(), True), \
+		StructField("relative_humidity_min_value", FloatType(), True), \
+		StructField("relative_humidity_max_value", FloatType(), True), \
+		StructField("relative_humidity_stdev_value", FloatType(), True), \
+		StructField("relative_humidity_sum_value", FloatType(), True), \
+		StructField("solar_radiaton_mean_value", FloatType(), True), \
+		StructField("solar_radiaton_min_value", FloatType(), True), \
+		StructField("solar_radiaton_max_value", FloatType(), True), \
+		StructField("solar_radiaton_stdev_value", FloatType(), True), \
+		StructField("solar_radiaton_sum_value", FloatType(), True), \
+		StructField("wind_speed_mean_value", FloatType(), True), \
+		StructField("wind_speed_min_value", FloatType(), True), \
+		StructField("wind_speed_max_value", FloatType(), True), \
+		StructField("wind_speed_stdev_value", FloatType(), True), \
+		StructField("wind_speed_sum_value", FloatType(), True), \
+		StructField("Evapotranspiration_mean_value", FloatType(), True), \
+		StructField("Evapotranspiration_min_value", FloatType(), True), \
+		StructField("Evapotranspiration_max_value", FloatType(), True), \
+		StructField("Evapotranspiration_stdev_value", FloatType(), True), \
+		StructField("Evapotranspiration_sum", FloatType(), True) \
 		])
+#		else:
+#			df_climate_schema = StructType([ \
+#			StructField("city_code", StringType(), True), \
+#			StructField("city_name", StringType(), True), \
+#			StructField("state_code", StringType(), True), \
+#			StructField("state_abbreviation", StringType(), True), \
+#			StructField("measurement_date", StringType(), True), \
+#			StructField("temperature_min_mean_value", FloatType(), True), \
+#			StructField("temperature_min_min_value", FloatType(), True), \
+#			StructField("temperature_min_max_value", FloatType(), True), \
+#			StructField("temperature_min_stdev_value", FloatType(), True), \
+#			StructField("temperature_min_sum_value", FloatType(), True), \
+#			StructField("temperature_max_mean_value", FloatType(), True), \
+#			StructField("temperature_max_min_value", FloatType(), True), \
+#			StructField("temperature_max_max_value", FloatType(), True), \
+#			StructField("temperature_max_stdev_value", FloatType(), True), \
+#			StructField("temperature_max_sum_value", FloatType(), True), \
+#			StructField("precipitation_mean_value", FloatType(), True), \
+#			StructField("precipitation_min_value", FloatType(), True), \
+#			StructField("precipitation_max_value", FloatType(), True), \
+#			StructField("precipitation_stdev_value", FloatType(), True), \
+#			StructField("precipitation_sum_value", FloatType(), True), \
+#			StructField("relative_humidity_mean_value", FloatType(), True), \
+#			StructField("relative_humidity_min_value", FloatType(), True), \
+#			StructField("relative_humidity_max_value", FloatType(), True), \
+#			StructField("relative_humidity_stdev_value", FloatType(), True), \
+#			StructField("relative_humidity_sum_value", FloatType(), True), \
+#			StructField("solar_radiaton_mean_value", FloatType(), True), \
+#			StructField("solar_radiaton_min_value", FloatType(), True), \
+#			StructField("solar_radiaton_max_value", FloatType(), True), \
+#			StructField("solar_radiaton_stdev_value", FloatType(), True), \
+#			StructField("solar_radiaton_sum_value", FloatType(), True), \
+#			StructField("wind_speed_mean_value", FloatType(), True), \
+#			StructField("wind_speed_min_value", FloatType(), True), \
+#			StructField("wind_speed_max_value", FloatType(), True), \
+#			StructField("wind_speed_stdev_value", FloatType(), True), \
+#			StructField("wind_speed_sum_value", FloatType(), True), \
+#			StructField("Evapotranspiration_mean_value", FloatType(), True), \
+#			StructField("Evapotranspiration_min_value", FloatType(), True), \
+#			StructField("Evapotranspiration_max_value", FloatType(), True), \
+#			StructField("Evapotranspiration_stdev_value", FloatType(), True), \
+#			StructField("Evapotranspiration_sum", FloatType(), True) \
+#			])
 
 		# *************************************************************
 		#  DATASUS_PERSON - Persistência dos dados 
@@ -1752,50 +1801,103 @@ if sys.argv[1] == 'CLIMATE':
 		# *************************************************************
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
-		df_climate_iceberg=spark.createDataFrame(df_climate.select( \
-		df_climate.code_muni, \
-		df_climate.name_muni, \
-		df_climate.code_state, \
-		df_climate.abbrev_state, \
-		df_climate.name_state, \
-		df_climate.code_region, \
-		df_climate.name_region, \
-		df_climate.date, \
-		df_climate.TMIN_mean, \
-		df_climate.TMIN_min, \
-		df_climate.TMIN_max, \
-		df_climate.TMIN_stdev, \
-		df_climate.TMAX_mean, \
-		df_climate.TMAX_min, \
-		df_climate.TMAX_max, \
-		df_climate.TMAX_stdev, \
-		df_climate.PR_mean, \
-		df_climate.PR_min, \
-		df_climate.PR_max, \
-		df_climate.PR_stdev, \
-		df_climate.PR_sum, \
-		df_climate.ETo_mean, \
-		df_climate.ETo_min, \
-		df_climate.ETo_max, \
-		df_climate.ETo_stdev, \
-		df_climate.ETo_sum, \
-		df_climate.RH_mean, \
-		df_climate.RH_min, \
-		df_climate.RH_max, \
-		df_climate.RH_stdev, \
-		df_climate.Rs_mean, \
-		df_climate.Rs_min, \
-		df_climate.Rs_max, \
-		df_climate.Rs_stdev, \
-		df_climate.u2_mean, \
-		df_climate.u2_min, \
-		df_climate.u2_max, \
-		df_climate.u2_stdev \
-		).rdd, df_climate_schema)
+		if any(field.name == "name_state" for field in df_climate.schema.fields):
+			df_climate_iceberg=spark.createDataFrame(df_climate.select( \
+			df_climate.code_muni.alias('city_code'), \
+			df_climate.name_muni.alias('city_name'), \
+			df_climate.code_state.alias('state_code'), \
+			df_climate.abbrev_state.alias('state_abbreviation'), \
+			df_climate.name_state.alias('state_name'), \
+			df_climate.code_region.alias('region_code'), \
+			df_climate.name_region.alias('region_name'), \
+			df_climate.date.alias('measurement_date'), \
+			df_climate.TMIN_mean.alias('temperature_min_mean_value'), \
+			df_climate.TMIN_min.alias('temperature_min_min_value'), \
+			df_climate.TMIN_max.alias('temperature_min_max_value'), \
+			df_climate.TMIN_stdev.alias('temperature_min_stdev_value'), \
+			FSql.lit(None).alias('temperature_min_sum_value'), \
+			df_climate.TMAX_mean.alias('temperature_max_mean_value'), \
+			df_climate.TMAX_min.alias('temperature_max_min_value'), \
+			df_climate.TMAX_max.alias('temperature_max_max_value'), \
+			df_climate.TMAX_stdev.alias('temperature_max_stdev_value'), \
+			FSql.lit(None).alias('temperature_max_sum_value'), \
+			df_climate.PR_mean.alias('precipitation_mean_value'), \
+			df_climate.PR_min.alias('precipitation_min_value'), \
+			df_climate.PR_max.alias('precipitation_max_value'), \
+			df_climate.PR_stdev.alias('precipitation_stdev_value'), \
+			df_climate.PR_sum.alias('precipitation_sum_value'), \
+			df_climate.ETo_mean.alias('relative_humidity_mean_value'), \
+			df_climate.ETo_min.alias('relative_humidity_min_value'), \
+			df_climate.ETo_max.alias('relative_humidity_max_value'), \
+			df_climate.ETo_stdev.alias('relative_humidity_stdev_value'), \
+			df_climate.ETo_sum.alias('relative_humidity_sum_value'), \
+			df_climate.RH_mean.alias('solar_radiaton_mean_value'), \
+			df_climate.RH_min.alias('solar_radiaton_min_value'), \
+			df_climate.RH_max.alias('solar_radiaton_max_value'), \
+			df_climate.RH_stdev.alias('solar_radiaton_stdev_value'), \
+			FSql.lit(None).alias('solar_radiaton_sum_value'), \
+			df_climate.Rs_mean.alias('wind_speed_mean_value'), \
+			df_climate.Rs_min.alias('wind_speed_min_value'), \
+			df_climate.Rs_max.alias('wind_speed_max_value'), \
+			df_climate.Rs_stdev.alias('wind_speed_stdev_value'), \
+			FSql.lit(None).alias('wind_speed_sum_value'), \
+			df_climate.u2_mean.alias('Evapotranspiration_mean_value'), \
+			df_climate.u2_min.alias('Evapotranspiration_min_value'), \
+			df_climate.u2_max.alias('Evapotranspiration_max_value'), \
+			df_climate.u2_stdev.alias('Evapotranspiration_stdev_value'), \
+			FSql.lit(None).alias('Evapotranspiration_sum')
+			).rdd, df_climate_schema)
+		else:
+			df_climate_iceberg=spark.createDataFrame(df_climate.select( \
+			df_climate.code_muni.alias('city_code'), \
+			df_climate.name_muni.alias('city_name'), \
+			df_climate.code_state.alias('state_code'), \
+			df_climate.abbrev_state.alias('state_abbreviation'), \
+			FSql.lit(None).alias('state_name'), \
+			FSql.lit(None).alias('region_code'), \
+			FSql.lit(None).alias('region_name'), \
+			df_climate.date.alias('measurement_date'), \
+			df_climate.TMIN_mean.alias('temperature_min_mean_value'), \
+			df_climate.TMIN_min.alias('temperature_min_min_value'), \
+			df_climate.TMIN_max.alias('temperature_min_max_value'), \
+			df_climate.TMIN_stdev.alias('temperature_min_stdev_value'), \
+			FSql.lit(None).alias('temperature_min_sum_value'), \
+			df_climate.TMAX_mean.alias('temperature_max_mean_value'), \
+			df_climate.TMAX_min.alias('temperature_max_min_value'), \
+			df_climate.TMAX_max.alias('temperature_max_max_value'), \
+			df_climate.TMAX_stdev.alias('temperature_max_stdev_value'), \
+			FSql.lit(None).alias('temperature_max_sum_value'), \
+			df_climate.PR_mean.alias('precipitation_mean_value'), \
+			df_climate.PR_min.alias('precipitation_min_value'), \
+			df_climate.PR_max.alias('precipitation_max_value'), \
+			df_climate.PR_stdev.alias('precipitation_stdev_value'), \
+			df_climate.PR_sum.alias('precipitation_sum_value'), \
+			df_climate.ETo_mean.alias('relative_humidity_mean_value'), \
+			df_climate.ETo_min.alias('relative_humidity_min_value'), \
+			df_climate.ETo_max.alias('relative_humidity_max_value'), \
+			df_climate.ETo_stdev.alias('relative_humidity_stdev_value'), \
+			df_climate.ETo_sum.alias('relative_humidity_sum_value'), \
+			df_climate.RH_mean.alias('solar_radiaton_mean_value'), \
+			df_climate.RH_min.alias('solar_radiaton_min_value'), \
+			df_climate.RH_max.alias('solar_radiaton_max_value'), \
+			df_climate.RH_stdev.alias('solar_radiaton_stdev_value'), \
+			FSql.lit(None).alias('solar_radiaton_sum_value'), \
+			df_climate.Rs_mean.alias('wind_speed_mean_value'), \
+			df_climate.Rs_min.alias('wind_speed_min_value'), \
+			df_climate.Rs_max.alias('wind_speed_max_value'), \
+			df_climate.Rs_stdev.alias('wind_speed_stdev_value'), \
+			FSql.lit(None).alias('wind_speed_sum_value'), \
+			df_climate.u2_mean.alias('Evapotranspiration_mean_value'), \
+			df_climate.u2_min.alias('Evapotranspiration_min_value'), \
+			df_climate.u2_max.alias('Evapotranspiration_max_value'), \
+			df_climate.u2_stdev.alias('Evapotranspiration_stdev_value'), \
+			FSql.lit(None).alias('Evapotranspiration_sum')
+			).rdd, df_climate_schema)
+			
 
 		# persistindo os dados de observation_period no banco.
 		if df_climate_iceberg.count() > 0:
-			df_climate_iceberg.writeTo("bios.rebios.climate").append()
+			df_climate_iceberg.writeTo("bios.rebios.datasus_climate").append()
 
 		logger.info("CLIMATE data execution finished with success. Please, check the log file.")
 		# return success
