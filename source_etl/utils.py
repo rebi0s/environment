@@ -31,6 +31,7 @@ def initSpark():
         .set("spark.sql.catalogImplementation", "in-memory")
         .set("spark.sql.defaultCatalog", os.getenv("CTRNA_CATALOG_DEFAULT","bios")) # Name of the Iceberg catalog
         .set("spark.sql.catalog.bios.database", "rebios") # Nome do banco de dados
+        .set("spark.sql.legacy.timeParserPolicy","LEGACY") # [INCONSISTENT_BEHAVIOR_CROSS_VERSION.PARSE_DATETIME_BY_NEW_PARSER] You may get a different result due to the upgrading to Spark >= 3.0:
     )
     spark = SparkSession.builder.config(conf=conf).getOrCreate()
     return spark

@@ -361,8 +361,8 @@ if sys.argv[1] == 'ETL':
 
         # dataframe with records of Type Of Health Unit
 		#df_cnes_tpunid = spark.read.format("iceberg").load(f"bios.rebios.type_of_unit")
-		# dataframe with existing location records
-		df_location = spark.read.format("iceberg").load(f"bios.rebios.location")
+		# dataframe with existing location records representing only cities
+		df_location = spark.read.format("iceberg").load(f"bios.rebios.location").filter(FSql.col("county").isNotNull())
 		# dataframe with existing care_sites
 		df_care_site = spark.read.format("iceberg").load(f"bios.rebios.care_site")
 		# dataframe with existing providers
@@ -429,10 +429,10 @@ if sys.argv[1] == 'ETL':
 			FSql.when((FSql.col("SEXO") == 'M') | (FSql.col("SEXO") == '1') | (FSql.col("SEXO") == 'Masculino'), 8507)
 			.when((FSql.col("SEXO") == 'F') | (FSql.col("SEXO") == '2') | (FSql.col("SEXO") == 'Feminino'), 8532)
 			.otherwise(8551).alias("gender_concept_id"),
-			FSql.coalesce(FSql.year(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 10, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), 'yyyy-MM-dd HHmm')), FSql.lit('0000').cast(IntegerType())).alias("year_of_birth"),
-			FSql.coalesce(FSql.month(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 10, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), 'yyyy-MM-dd HHmm')), FSql.lit('00').cast(IntegerType())).alias("month_of_birth"),
-			FSql.coalesce(FSql.dayofmonth(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 10, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), 'yyyy-MM-dd HHmm')), FSql.lit('00').cast(IntegerType())).alias("day_of_birth"),
-			FSql.to_timestamp(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 10, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), 'yyyy-MM-dd HHmm')).alias("birth_timestamp"),
+			FSql.coalesce(FSql.year(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), 'ddMMyyyy HHmm')), FSql.lit('0000').cast(IntegerType())).alias("year_of_birth"),
+			FSql.coalesce(FSql.month(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), 'ddMMyyyy HHmm')), FSql.lit('00').cast(IntegerType())).alias("month_of_birth"),
+			FSql.coalesce(FSql.dayofmonth(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), 'ddMMyyyy HHmm')), FSql.lit('00').cast(IntegerType())).alias("day_of_birth"),
+			FSql.to_timestamp(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), 'ddMMyyyy HHmm')).alias("birth_timestamp"),
 			FSql.when ((FSql.col("RACACOR") == 1) | (FSql.col("RACACOR") == 'Branca'), 3212942)
 			.when((FSql.col("RACACOR") == 2) | (FSql.col("RACACOR") == 'Preta'), 3213733)
 			.when((FSql.col("RACACOR") == 3) | (FSql.col("RACACOR") == 'Amarela'), 3213498)
@@ -488,8 +488,8 @@ if sys.argv[1] == 'ETL':
 		df_obs_period=spark.createDataFrame(df_sinasc.select(\
 		FSql.lit(0).cast(LongType()).alias('observation_period_id'), \
 		df_sinasc.person_id.alias('person_id'), \
-		FSql.to_timestamp(FSql.to_timestamp(FSql.coalesce(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 10, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), FSql.lit('1991-01-01 0000')), 'yyyy-MM-dd HHmm')).alias("observation_period_start_date"),\
-		FSql.to_timestamp(FSql.to_timestamp(FSql.coalesce(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 10, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), FSql.lit('1991-01-01 0000')), 'yyyy-MM-dd HHmm')).alias("observation_period_end_date"),\
+		FSql.to_timestamp(FSql.to_timestamp(FSql.coalesce(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), FSql.lit('01011991 0000')), 'ddMMyyyy HHmm')).alias("observation_period_start_date"),\
+		FSql.to_timestamp(FSql.to_timestamp(FSql.coalesce(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), FSql.lit('01011991 0000')), 'ddMMyyyy HHmm')).alias("observation_period_end_date"),\
 		FSql.lit(4193440).alias('period_type_concept_id')).rdd, \
 		df_obs_period_schema)
 
@@ -547,9 +547,9 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.when(df_sinasc['STDNEPIDEM'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
@@ -589,9 +589,9 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.when(df_sinasc['TPAPRESENT'] == '1', 999999).when(df_sinasc['TPAPRESENT'] == '2', 999999).when(df_sinasc['TPAPRESENT'] == '3', 4218938).otherwise(999998).alias('condition_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
@@ -630,9 +630,9 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(1576063).cast(LongType()).alias('condition_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
@@ -672,9 +672,9 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(999997).cast(LongType()).alias('condition_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
@@ -713,9 +713,9 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(4072438).cast(LongType()).alias('condition_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
@@ -755,9 +755,9 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(999996).cast(LongType()).alias('condition_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
@@ -797,9 +797,9 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(999995).cast(LongType()).alias('condition_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
@@ -839,9 +839,9 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(4313474).cast(LongType()).alias('condition_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
@@ -880,9 +880,9 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(999994).cast(LongType()).alias('condition_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
@@ -921,9 +921,9 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(999993).cast(LongType()).alias('condition_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_start_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("condition_end_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
 		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
@@ -1007,9 +1007,9 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(999992).cast(LongType()).alias('procedure_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_end_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
 		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
@@ -1049,9 +1049,9 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(999991).cast(LongType()).alias('procedure_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_end_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
 		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
@@ -1091,9 +1091,9 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(4313474).cast(LongType()).alias('procedure_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_end_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
 		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
@@ -1133,9 +1133,9 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(999989).cast(LongType()).alias('procedure_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_end_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
 		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
@@ -1175,9 +1175,9 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(999988).cast(LongType()).alias('procedure_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias("procedure_end_date"), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
 		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
@@ -1276,7 +1276,7 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('measurement_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(9999987).cast(LongType()).alias('measurement_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias('measurement_date'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias('measurement_date'), \
 		FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
 		FSql.lit(None).cast(FloatType()).alias('value_as_number'), \
 		FSql.lit(None).cast(TimestampType()).alias('measurement_timestamp'), \
@@ -1325,7 +1325,7 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('measurement_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(4014304).cast(LongType()).alias('measurement_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias('measurement_date'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias('measurement_date'), \
 		FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
 		FSql.lit(None).cast(FloatType()).alias('value_as_number'), \
 		FSql.lit(None).cast(TimestampType()).alias('measurement_timestamp'), \
@@ -1374,7 +1374,7 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('measurement_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(4016464).cast(LongType()).alias('measurement_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias('measurement_date'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias('measurement_date'), \
 		FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
 		FSql.lit(None).cast(FloatType()).alias('value_as_number'), \
 		FSql.lit(None).cast(TimestampType()).alias('measurement_timestamp'), \
@@ -1424,7 +1424,7 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('measurement_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(4264825).cast(LongType()).alias('measurement_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias('measurement_date'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias('measurement_date'), \
 		FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
 		FSql.lit(None).cast(FloatType()).alias('value_as_number'), \
 		FSql.lit(None).cast(TimestampType()).alias('measurement_timestamp'), \
@@ -1527,7 +1527,7 @@ if sys.argv[1] == 'ETL':
 		FSql.lit(0).cast(LongType()).alias('observation_id'), \
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(9999986).cast(LongType()).alias('observation_concept_id'), \
-		FSql.to_timestamp(FSql.lpad(df_sinasc.DTNASC,10,'0'), 'yyyy-MM-dd').alias('observation_date'), \
+		FSql.to_timestamp(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias('observation_date'), \
 		FSql.lit(None).cast(TimestampType()).alias('observation_timestamp'), \
 		FSql.lit(32848).cast(LongType()).alias('observation_type_concept_id'), \
 		FSql.lit(None).cast(FloatType()).alias('value_as_number'), \
@@ -1656,7 +1656,7 @@ if sys.argv[1] == 'ETL':
 		df_sinasc.person_id.alias('person_id'), \
 		FSql.lit(1).cast(IntegerType()).alias('system_source_id'), \
 		df_sinasc.DTNASCMAE.alias('mother_birth_date_source_value'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASCMAE,10,'0'), 'yyyy-MM-dd').alias('mother_birth_date'), \
+		FSql.to_date(FSql.lpad(df_sinasc.DTNASCMAE,10,'0'), 'DDmmyyyy').alias('mother_birth_date'), \
 		df_sinasc.ESCMAE.alias('mother_years_of_study'), \
 		df_sinasc.ESCMAE2010.alias('mother_education_level'), \
 		df_sinasc.ESCMAEAGR1.alias('mother_education_level_aggregated'), \
