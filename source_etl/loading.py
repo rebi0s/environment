@@ -1704,7 +1704,6 @@ if sys.argv[1] == 'CLIMATE':
 
 		df_climate = spark.read.parquet(os.path.join(sys.argv[2], sys.argv[3]))
 
-		#if any(field.name == "name_state" for field in df_climate.schema.fields):
 		df_climate_schema = StructType([ \
 		StructField("city_code", StringType(), True), \
 		StructField("city_name", StringType(), True), \
@@ -1750,49 +1749,6 @@ if sys.argv[1] == 'CLIMATE':
 		StructField("Evapotranspiration_stdev_value", FloatType(), True), \
 		StructField("Evapotranspiration_sum", FloatType(), True) \
 		])
-#		else:
-#			df_climate_schema = StructType([ \
-#			StructField("city_code", StringType(), True), \
-#			StructField("city_name", StringType(), True), \
-#			StructField("state_code", StringType(), True), \
-#			StructField("state_abbreviation", StringType(), True), \
-#			StructField("measurement_date", StringType(), True), \
-#			StructField("temperature_min_mean_value", FloatType(), True), \
-#			StructField("temperature_min_min_value", FloatType(), True), \
-#			StructField("temperature_min_max_value", FloatType(), True), \
-#			StructField("temperature_min_stdev_value", FloatType(), True), \
-#			StructField("temperature_min_sum_value", FloatType(), True), \
-#			StructField("temperature_max_mean_value", FloatType(), True), \
-#			StructField("temperature_max_min_value", FloatType(), True), \
-#			StructField("temperature_max_max_value", FloatType(), True), \
-#			StructField("temperature_max_stdev_value", FloatType(), True), \
-#			StructField("temperature_max_sum_value", FloatType(), True), \
-#			StructField("precipitation_mean_value", FloatType(), True), \
-#			StructField("precipitation_min_value", FloatType(), True), \
-#			StructField("precipitation_max_value", FloatType(), True), \
-#			StructField("precipitation_stdev_value", FloatType(), True), \
-#			StructField("precipitation_sum_value", FloatType(), True), \
-#			StructField("relative_humidity_mean_value", FloatType(), True), \
-#			StructField("relative_humidity_min_value", FloatType(), True), \
-#			StructField("relative_humidity_max_value", FloatType(), True), \
-#			StructField("relative_humidity_stdev_value", FloatType(), True), \
-#			StructField("relative_humidity_sum_value", FloatType(), True), \
-#			StructField("solar_radiaton_mean_value", FloatType(), True), \
-#			StructField("solar_radiaton_min_value", FloatType(), True), \
-#			StructField("solar_radiaton_max_value", FloatType(), True), \
-#			StructField("solar_radiaton_stdev_value", FloatType(), True), \
-#			StructField("solar_radiaton_sum_value", FloatType(), True), \
-#			StructField("wind_speed_mean_value", FloatType(), True), \
-#			StructField("wind_speed_min_value", FloatType(), True), \
-#			StructField("wind_speed_max_value", FloatType(), True), \
-#			StructField("wind_speed_stdev_value", FloatType(), True), \
-#			StructField("wind_speed_sum_value", FloatType(), True), \
-#			StructField("Evapotranspiration_mean_value", FloatType(), True), \
-#			StructField("Evapotranspiration_min_value", FloatType(), True), \
-#			StructField("Evapotranspiration_max_value", FloatType(), True), \
-#			StructField("Evapotranspiration_stdev_value", FloatType(), True), \
-#			StructField("Evapotranspiration_sum", FloatType(), True) \
-#			])
 
 		# *************************************************************
 		#  DATASUS_PERSON - Persistência dos dados 
