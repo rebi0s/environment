@@ -323,9 +323,18 @@ if sys.argv[1] == 'ETL':
 				sys.exit(-1)
 
 		df_sinasc = spark.read.parquet(os.path.join(sys.argv[2], sys.argv[3]))
+		df_sinasc.count()
 
 		# column HORANASC is presenting null values on source file and that will be filled with 0000
 		df_sinasc=df_sinasc.fillna({"HORANASC": "0000"})
+
+		# column DATANASC is presenting null values on source file and those records will be discarded
+		df_sinasc=df_sinasc.filter((df_sinasc["DTNASC"].isNull() == False) & (df_sinasc["DTNASC"].rlike("^[0-9]{8}$")))
+		#df_sinasc=df_sinasc.filter((df_sinasc["HORANASC"].isNull() == False))
+		#df_sinasc=df_sinasc.filter((df_sinasc["HORANASC"].rlike("^[0-9]{4}$")) & (~df_sinasc["HORANASC"].rlike("[^0-9]")))
+		#df_sinasc=df_sinasc.filter((df_sinasc["HORANASC"] <= 2359))
+		df_sinasc = df_sinasc.withColumn("HORANASC", FSql.when(((df_sinasc["HORANASC"] > 2359) | ~(df_sinasc["HORANASC"].rlike("^[0-9]{4}$")) | (~df_sinasc["HORANASC"].rlike("[^0-9]"))) == True, "0000").otherwise(df_sinasc["HORANASC"]))
+
 
         # |-- LOCNASC <- as.factor(.data$LOCNASC): string (nullable = true)
         # |-- IDADEMAE <- as.factor(.data$IDADEMAE): string (nullable = true)
@@ -492,6 +501,9 @@ if sys.argv[1] == 'ETL':
 		FSql.to_timestamp(FSql.to_timestamp(FSql.coalesce(FSql.concat(FSql.lpad(FSql.col("DTNASC"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORANASC"), FSql.lit('0000')), 4, '0')), FSql.lit('01011991 0000')), 'ddMMyyyy HHmm')).alias("observation_period_end_date"),\
 		FSql.lit(4193440).alias('period_type_concept_id')).rdd, \
 		df_obs_period_schema)
+
+		#df_null = df_obs_period.filter(df_obs_period["observation_period_start_date"].isNull() == True)
+		#df_null.show(n=999999, truncate=False)
 
 		if df_obs_period.count() > 0:
 			#obtem o max da tabela para usar na inserção de novos registros
