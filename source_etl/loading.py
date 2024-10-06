@@ -322,6 +322,7 @@ if sys.argv[1] == 'ETL':
 				logger.info("Arquivo SINASC não localizado. Carga interrompida.")
 				sys.exit(-1)
 
+		logger.info("Loading file: ", os.path.join(sys.argv[2], sys.argv[3]))
 		df_sinasc = spark.read.parquet(os.path.join(sys.argv[2], sys.argv[3]))
 		df_sinasc.count()
 
@@ -371,10 +372,13 @@ if sys.argv[1] == 'ETL':
         # dataframe with records of Type Of Health Unit
 		#df_cnes_tpunid = spark.read.format("iceberg").load(f"bios.rebios.type_of_unit")
 		# dataframe with existing location records representing only cities
+		logger.info("Loading info from Locations...")
 		df_location = spark.read.format("iceberg").load(f"bios.rebios.location").filter(FSql.col("county").isNotNull())
 		# dataframe with existing care_sites
+		logger.info("Loading info from Care Sites...")
 		df_care_site = spark.read.format("iceberg").load(f"bios.rebios.care_site")
 		# dataframe with existing providers
+		logger.info("Loading info from Providers...")
 		df_provider = spark.read.format("iceberg").load(f"bios.rebios.provider")
 
 		# dataframe with concept records
@@ -433,6 +437,7 @@ if sys.argv[1] == 'ETL':
 			StructField("ethnicity_source_concept_id", LongType(), True) \
 		])
 
+		logger.info("Processing Person data...")
 		df_person = spark.createDataFrame(df_sinasc.select(
 			FSql.col("person_id"),
 			FSql.when((FSql.col("SEXO") == 'M') | (FSql.col("SEXO") == '1') | (FSql.col("SEXO") == 'Masculino'), 8507)
@@ -451,7 +456,7 @@ if sys.argv[1] == 'ETL':
 			FSql.lit(38003563).alias('ethnicity_concept_id'),
 			FSql.col("location_id_city").alias('location_id'),
 			FSql.lit(None).cast(StringType()).alias('provider_id'),
-			FSql.col("location_id_care_site").alias('care_site_id'),
+			FSql.col("care_site_id").alias('care_site_id'),
 			FSql.lit(None).cast(StringType()).alias('person_source_value'),
 			FSql.col("SEXO").alias('gender_source_value'),
 			FSql.lit(None).cast(StringType()).alias('gender_source_concept_id'),
@@ -468,7 +473,7 @@ if sys.argv[1] == 'ETL':
 			df_person.writeTo("bios.rebios.person").append()
 			logger.info("Table Person was succesfully updated with SINASC data.")
 		else:
-			logger.error("Erro ao processar arquivo SINASC. Nenhum registro localizado para carregamento.")
+			logger.error("Error on processing Person data.")
 			exit(-1)
 		# *************************************************************
 		#  OBSERVATION_PERIOD - Persistência dos dados 
@@ -494,6 +499,7 @@ if sys.argv[1] == 'ETL':
 
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		logger.info("Processing Observation Period data...")
 		df_obs_period=spark.createDataFrame(df_sinasc.select(\
 		FSql.lit(0).cast(LongType()).alias('observation_period_id'), \
 		df_sinasc.person_id.alias('person_id'), \
@@ -517,6 +523,8 @@ if sys.argv[1] == 'ETL':
 			df_obs_period = df_obs_period.withColumn("observation_period_id", df_obs_period["observation_period_id"] + count_max_obs_period)
 			# persistindo os dados de observation_period no banco.
 			df_obs_period.writeTo("bios.rebios.observation_period").append()
+			logger.info("Table Obervation Period was succesfully updated with SINASC data.")
+
 
 
 
@@ -586,6 +594,7 @@ if sys.argv[1] == 'ETL':
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
 			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [STDNEPIDEM] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -628,6 +637,7 @@ if sys.argv[1] == 'ETL':
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
 			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [TPAPRESENT] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -670,6 +680,7 @@ if sys.argv[1] == 'ETL':
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
 			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [SEMAGESTAC] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -711,6 +722,7 @@ if sys.argv[1] == 'ETL':
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
 			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [CODANOMAL] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -753,6 +765,7 @@ if sys.argv[1] == 'ETL':
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
 			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [DTULTMENST] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -794,6 +807,7 @@ if sys.argv[1] == 'ETL':
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
 			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [GESTACAO] was succesfully updated with SINASC data.")
 
 
 		# *************************************************************
@@ -837,6 +851,7 @@ if sys.argv[1] == 'ETL':
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
 			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [GRAVIDEZ] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -878,6 +893,7 @@ if sys.argv[1] == 'ETL':
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
 			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [CONSPRENAT] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -888,37 +904,40 @@ if sys.argv[1] == 'ETL':
 		#(df_condition_occur.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.kotelchuck)""") # KOTELCHUCK	1 Não fez pré-natal (Campo33=0); 2 Inadequado (Campo34>3 ou Campo34<=3 e Campo33<3); 3 Intermediário (Campo34<=3 e Campo33 entre 3 e 5); 4 Adequado (Campo34<=3 e Campo33=6); 5 Mais que adequado (Campo34<=3 e Campo33>=7); 6 Não Classificados (campos 33 ou 34, Nulo ou Ign)
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
-		df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
-		df_sinasc.person_id.alias('person_id'), \
-		FSql.lit(999994).cast(LongType()).alias('condition_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
-		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
-		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
-		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
-		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
-		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
-		FSql.lit(None).cast(LongType()).alias('provider_id'), \
-		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
-		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
-		df_sinasc.KOTELCHUCK.alias('condition_source_value'), \
-		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
-		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
-		).rdd, df_cond_occur_schema)
 
-		if df_cond_occur.count() > 0:
-			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
-			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
-			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
-			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
-			# persistindo os dados de observation_period no banco.
-			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+		if any(field.name == "KOTELCHUCK" for field in df_sinasc.schema.fields):
+			df_cond_occur=spark.createDataFrame(df_sinasc.select( \
+			FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+			df_sinasc.person_id.alias('person_id'), \
+			FSql.lit(999994).cast(LongType()).alias('condition_concept_id'), \
+			FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+			FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+			FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+			FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+			FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+			FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+			FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+			FSql.lit(None).cast(LongType()).alias('provider_id'), \
+			FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+			FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+			df_sinasc.KOTELCHUCK.alias('condition_source_value'), \
+			FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+			FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+			).rdd, df_cond_occur_schema)
+
+			if df_cond_occur.count() > 0:
+				#obtem o max da tabela para usar na inserção de novos registros
+				count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+				count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+				#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+				# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+				# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+				df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+				#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+				df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+				# persistindo os dados de observation_period no banco.
+				df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+				logger.info("Table Condition Occurrence [KOTELCHUCK] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -1535,42 +1554,43 @@ if sys.argv[1] == 'ETL':
 		#(df_condition_occur.identity, df_sinasc.identity, , makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.paridade)""") # PARIDADE	
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
-		df_observation=spark.createDataFrame(df_sinasc.select( \
-		FSql.lit(0).cast(LongType()).alias('observation_id'), \
-		df_sinasc.person_id.alias('person_id'), \
-		FSql.lit(9999986).cast(LongType()).alias('observation_concept_id'), \
-		FSql.to_timestamp(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias('observation_date'), \
-		FSql.lit(None).cast(TimestampType()).alias('observation_timestamp'), \
-		FSql.lit(32848).cast(LongType()).alias('observation_type_concept_id'), \
-		FSql.lit(None).cast(FloatType()).alias('value_as_number'), \
-		FSql.lit(None).cast(StringType()).alias('value_source_value'), \
-		FSql.lit(None).cast(StringType()).alias('value_as_string'), \
-		FSql.lit(None).cast(LongType()).alias('value_as_concept_id'), \
-		FSql.lit(None).cast(LongType()).alias('qualifier_concept_id'), \
-		FSql.lit(None).cast(LongType()).alias('unit_concept_id'), \
-		FSql.lit(None).cast(LongType()).alias('provider_id'), \
-		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
-		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
-		df_sinasc.PARIDADE.alias('observation_source_value'), \
-		FSql.lit(None).cast(LongType()).alias('observation_source_concept_id'), \
-		FSql.lit(None).cast(StringType()).alias('unit_source_value'), \
-		FSql.lit(None).cast(StringType()).alias('qualifier_source_value'), \
-		FSql.lit(None).cast(LongType()).alias('observation_event_id'), \
-		FSql.lit(None).cast(LongType()).alias('obs_event_field_concept_id'), \
-		).rdd, df_observation_schema)
+		if any(field.name == "PARIDADE" for field in df_sinasc.schema.fields):
+			df_observation=spark.createDataFrame(df_sinasc.select( \
+			FSql.lit(0).cast(LongType()).alias('observation_id'), \
+			df_sinasc.person_id.alias('person_id'), \
+			FSql.lit(9999986).cast(LongType()).alias('observation_concept_id'), \
+			FSql.to_timestamp(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias('observation_date'), \
+			FSql.lit(None).cast(TimestampType()).alias('observation_timestamp'), \
+			FSql.lit(32848).cast(LongType()).alias('observation_type_concept_id'), \
+			FSql.lit(None).cast(FloatType()).alias('value_as_number'), \
+			FSql.lit(None).cast(StringType()).alias('value_source_value'), \
+			FSql.lit(None).cast(StringType()).alias('value_as_string'), \
+			FSql.lit(None).cast(LongType()).alias('value_as_concept_id'), \
+			FSql.lit(None).cast(LongType()).alias('qualifier_concept_id'), \
+			FSql.lit(None).cast(LongType()).alias('unit_concept_id'), \
+			FSql.lit(None).cast(LongType()).alias('provider_id'), \
+			FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+			FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+			df_sinasc.PARIDADE.alias('observation_source_value'), \
+			FSql.lit(None).cast(LongType()).alias('observation_source_concept_id'), \
+			FSql.lit(None).cast(StringType()).alias('unit_source_value'), \
+			FSql.lit(None).cast(StringType()).alias('qualifier_source_value'), \
+			FSql.lit(None).cast(LongType()).alias('observation_event_id'), \
+			FSql.lit(None).cast(LongType()).alias('obs_event_field_concept_id'), \
+			).rdd, df_observation_schema)
 
-		if df_observation.count() > 0:
-			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_observation_df = spark.sql("SELECT greatest(max(observation_id),0) + 1 AS max_observation FROM bios.rebios.observation")
-			count_max_observation = count_max_observation_df.first().max_observation
-			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-			df_observation = df_observation.withColumn("observation_id", monotonically_increasing_id())
-			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-			df_observation = df_observation.withColumn("observation_id", df_observation["observation_id"] + count_max_observation)
-			# persistindo os dados de observation_period no banco.
-			df_observation.writeTo("bios.rebios.observation").append()
+			if df_observation.count() > 0:
+				#obtem o max da tabela para usar na inserção de novos registros
+				count_max_observation_df = spark.sql("SELECT greatest(max(observation_id),0) + 1 AS max_observation FROM bios.rebios.observation")
+				count_max_observation = count_max_observation_df.first().max_observation
+				#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+				# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+				# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+				df_observation = df_observation.withColumn("observation_id", monotonically_increasing_id())
+				#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+				df_observation = df_observation.withColumn("observation_id", df_observation["observation_id"] + count_max_observation)
+				# persistindo os dados de observation_period no banco.
+				df_observation.writeTo("bios.rebios.observation").append()
 
 		#registro datasus_person (extension table to receive extras fields from SINASC/SIM)
 		#Create table datasus_person (
@@ -1690,7 +1710,7 @@ if sys.argv[1] == 'ETL':
 		df_sinasc.QTDGESTANT.cast(IntegerType()).alias('number_of_previous_pregnancies'), \
 		df_sinasc.QTDPARTCES.cast(IntegerType()).alias('number_of_previous_cesareans'), \
 		df_sinasc.QTDPARTNOR.cast(IntegerType()).alias('number_of_previous_normal_born') \
-		).rdd, df_datasus_person_schema)
+		).rdd, df_datasus_person_schema)	
 
 		# persistindo os dados de observation_period no banco.
 		if df_datasus_person.count() > 0:
