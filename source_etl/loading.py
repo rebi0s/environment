@@ -325,6 +325,8 @@ if sys.argv[1] == 'ETL':
 		logger.info("Loading file: ", os.path.join(sys.argv[2], sys.argv[3]))
 		df_sinasc = spark.read.parquet(os.path.join(sys.argv[2], sys.argv[3]))
 		df_sinasc.count()
+		source_filename = os.path.join(sys.argv[2], sys.argv[3])
+		ingestion_timestamp = datetime.now()
 
 		# column HORANASC is presenting null values on source file and that will be filled with 0000
 		df_sinasc=df_sinasc.fillna({"HORANASC": "0000"})
@@ -980,6 +982,7 @@ if sys.argv[1] == 'ETL':
 			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
 			# persistindo os dados de observation_period no banco.
 			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [TPMETESTIM] was succesfully updated with SINASC data.")
 
 		# registro da procedure_occurrence
 		#CREATE TABLE procedure_occurrence (
@@ -1065,6 +1068,7 @@ if sys.argv[1] == 'ETL':
 			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
 			# persistindo os dados de observation_period no banco.
 			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [PARTO] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  PROCEDURE_OCCURRENCE - Persistência dos dados 
@@ -1107,6 +1111,7 @@ if sys.argv[1] == 'ETL':
 			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
 			# persistindo os dados de observation_period no banco.
 			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [STTRABPART] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  PROCEDURE_OCCURRENCE - Persistência dos dados 
@@ -1149,6 +1154,7 @@ if sys.argv[1] == 'ETL':
 			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
 			# persistindo os dados de observation_period no banco.
 			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [CONSULTAS] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  PROCEDURE_OCCURRENCE - Persistência dos dados 
@@ -1191,6 +1197,7 @@ if sys.argv[1] == 'ETL':
 			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
 			# persistindo os dados de observation_period no banco.
 			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [MESPRENAT] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  PROCEDURE_OCCURRENCE - Persistência dos dados 
@@ -1234,6 +1241,7 @@ if sys.argv[1] == 'ETL':
 			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
 			# persistindo os dados de observation_period no banco.
 			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [STCESPARTO] was succesfully updated with SINASC data.")
 
 
 		# resgistro do measurement
@@ -1341,6 +1349,7 @@ if sys.argv[1] == 'ETL':
 			df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
 			# persistindo os dados de observation_period no banco.
 			df_measurement.writeTo("bios.rebios.measurement").append()
+			logger.info("Table Measurement Occurrence [TPROBSON] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  MEASUREMENT - Persistência dos dados 
@@ -1390,6 +1399,7 @@ if sys.argv[1] == 'ETL':
 			df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
 			# persistindo os dados de observation_period no banco.
 			df_measurement.writeTo("bios.rebios.measurement").append()
+			logger.info("Table Measurement Occurrence [APGAR1] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  MEASUREMENT - Persistência dos dados 
@@ -1440,6 +1450,7 @@ if sys.argv[1] == 'ETL':
 			df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
 			# persistindo os dados de observation_period no banco.
 			df_measurement.writeTo("bios.rebios.measurement").append()
+			logger.info("Table Measurement Occurrence [APGAR5] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  MEASUREMENT - Persistência dos dados 
@@ -1489,6 +1500,7 @@ if sys.argv[1] == 'ETL':
 			df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
 			# persistindo os dados de observation_period no banco.
 			df_measurement.writeTo("bios.rebios.measurement").append()
+			logger.info("Table Measurement Occurrence [PESO] was succesfully updated with SINASC data.")
 
 		#registro observation
 		#CREATE TABLE observation (
@@ -1591,6 +1603,7 @@ if sys.argv[1] == 'ETL':
 				df_observation = df_observation.withColumn("observation_id", df_observation["observation_id"] + count_max_observation)
 				# persistindo os dados de observation_period no banco.
 				df_observation.writeTo("bios.rebios.observation").append()
+				logger.info("Table Observation [PARIDADE] was succesfully updated with SINASC data.")
 
 		#registro datasus_person (extension table to receive extras fields from SINASC/SIM)
 		#Create table datasus_person (
@@ -1652,20 +1665,18 @@ if sys.argv[1] == 'ETL':
 		df_datasus_person_schema = StructType([ \
 		StructField("person_id", LongType(), False), \
 		StructField("system_source_id", IntegerType(), False), \
+		StructField("datasus_person_source_date", DateType(), False), \
+		StructField("ingestion_timestamp", TimestampType(), False), \
+		StructField("source_file", StringType(), False), \
 		StructField("mother_birth_date_source_value", StringType(), True), \
 		StructField("mother_birth_date", DateType(), True), \
 		StructField("mother_years_of_study", StringType(), True), \
-		StructField("mother_education_level", StringType(), True), \
-		StructField("mother_education_level_aggregated", StringType(), True), \
 		StructField("mother_marital_status", StringType(), True), \
 		StructField("mother_age", IntegerType(), True), \
 		StructField("mother_city_of_birth", IntegerType(), True), \
-		StructField("mother_state_of_birth", IntegerType(), True), \
 		StructField("mother_race", StringType(), True), \
 		StructField("mother_elementary_school", IntegerType(), True), \
 		StructField("father_age", IntegerType(), True), \
-		StructField("responsible_document_type", IntegerType(), True), \
-		StructField("responsible_role_type", IntegerType(), True), \
 		StructField("place_of_birth_type_source_value", StringType(), True), \
 		StructField("care_site_of_birth_source_value", IntegerType(), True), \
 		StructField("mother_professional_occupation", StringType(), True), \
@@ -1674,7 +1685,12 @@ if sys.argv[1] == 'ETL':
 		StructField("number_of_living_children", IntegerType(), True), \
 		StructField("number_of_previous_pregnancies", IntegerType(), True), \
 		StructField("number_of_previous_cesareans", IntegerType(), True), \
-		StructField("number_of_previous_normal_born", IntegerType(), True) \
+		StructField("number_of_previous_normal_born", IntegerType(), True), \
+		StructField("mother_education_level", StringType(), True), \
+		StructField("mother_education_level_aggregated", StringType(), True), \
+		StructField("mother_state_of_birth", IntegerType(), True), \
+		StructField("responsible_document_type", IntegerType(), True), \
+		StructField("responsible_role_type", IntegerType(), True)\
 		])
 
 		# *************************************************************
@@ -1684,37 +1700,161 @@ if sys.argv[1] == 'ETL':
 		# *************************************************************
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
-		df_datasus_person=spark.createDataFrame(df_sinasc.select( \
-		df_sinasc.person_id.alias('person_id'), \
-		FSql.lit(1).cast(IntegerType()).alias('system_source_id'), \
-		df_sinasc.DTNASCMAE.alias('mother_birth_date_source_value'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASCMAE,10,'0'), 'DDmmyyyy').alias('mother_birth_date'), \
-		df_sinasc.ESCMAE.alias('mother_years_of_study'), \
-		df_sinasc.ESCMAE2010.alias('mother_education_level'), \
-		df_sinasc.ESCMAEAGR1.alias('mother_education_level_aggregated'), \
-		df_sinasc.ESTCIVMAE.alias('mother_marital_status'), \
-		df_sinasc.IDADEMAE.cast(IntegerType()).alias('mother_age'), \
-		df_sinasc.CODMUNNATU.cast(IntegerType()).alias('mother_city_of_birth'), \
-		df_sinasc.CODUFNATU.cast(IntegerType()).alias('mother_state_of_birth'), \
-		df_sinasc.RACACORMAE.alias('mother_race'), \
-		df_sinasc.SERIESCMAE.cast(IntegerType()).alias('mother_elementary_school'), \
-		df_sinasc.IDADEPAI.cast(IntegerType()).alias('father_age'), \
-		df_sinasc.TPDOCRESP.cast(IntegerType()).alias('responsible_document_type'), \
-		df_sinasc.TPFUNCRESP.cast(IntegerType()).alias('responsible_role_type'), \
-		df_sinasc.LOCNASC.alias('place_of_birth_type_source_value'), \
-		df_sinasc.CODESTAB.cast(IntegerType()).alias('care_site_of_birth_source_value'), \
-		df_sinasc.CODOCUPMAE.alias('mother_professional_occupation'), \
-		df_sinasc.NATURALMAE.cast(IntegerType()).alias('mother_country_of_origin'), \
-		df_sinasc.QTDFILMORT.cast(IntegerType()).alias('number_of_dead_children'), \
-		df_sinasc.QTDFILVIVO.cast(IntegerType()).alias('number_of_living_children'), \
-		df_sinasc.QTDGESTANT.cast(IntegerType()).alias('number_of_previous_pregnancies'), \
-		df_sinasc.QTDPARTCES.cast(IntegerType()).alias('number_of_previous_cesareans'), \
-		df_sinasc.QTDPARTNOR.cast(IntegerType()).alias('number_of_previous_normal_born') \
-		).rdd, df_datasus_person_schema)	
+#		datasus_person=spark.createDataFrame(df_sinasc.select( \
+#		df_sinasc.person_id.alias('person_id'), \
+#		FSql.lit(1).cast(IntegerType()).alias('system_source_id'), \
+#		df_sinasc.DTNASCMAE.alias('mother_birth_date_source_value'), \
+#		FSql.to_date(FSql.lpad(df_sinasc.DTNASCMAE,10,'0'), 'DDmmyyyy').alias('mother_birth_date'), \
+#		df_sinasc.ESCMAE.alias('mother_years_of_study'), \
+#		df_sinasc.ESTCIVMAE.alias('mother_marital_status'), \
+#		df_sinasc.IDADEMAE.cast(IntegerType()).alias('mother_age'), \
+#		df_sinasc.CODMUNNATU.cast(IntegerType()).alias('mother_city_of_birth'), \
+#		df_sinasc.RACACORMAE.alias('mother_race'), \
+#		df_sinasc.SERIESCMAE.cast(IntegerType()).alias('mother_elementary_school'), \
+#		df_sinasc.IDADEPAI.cast(IntegerType()).alias('father_age'), \
+#		df_sinasc.LOCNASC.alias('place_of_birth_type_source_value'), \
+#		df_sinasc.CODESTAB.cast(IntegerType()).alias('care_site_of_birth_source_value'), \
+#		df_sinasc.CODOCUPMAE.alias('mother_professional_occupation'), \
+#		df_sinasc.NATURALMAE.cast(IntegerType()).alias('mother_country_of_origin'), \
+#		df_sinasc.QTDFILMORT.cast(IntegerType()).alias('number_of_dead_children'), \
+#		df_sinasc.QTDFILVIVO.cast(IntegerType()).alias('number_of_living_children'), \
+#		df_sinasc.QTDGESTANT.cast(IntegerType()).alias('number_of_previous_pregnancies'), \
+#		df_sinasc.QTDPARTCES.cast(IntegerType()).alias('number_of_previous_cesareans'), \
+#		df_sinasc.QTDPARTNOR.cast(IntegerType()).alias('number_of_previous_normal_born') \
+#		).rdd, df_datasus_person_schema)	
+
+
+#		df_sinasc.ESCMAE2010.alias('mother_education_level'), \
+#		df_sinasc.ESCMAEAGR1.alias('mother_education_level_aggregated'), \
+#		df_sinasc.CODUFNATU.cast(IntegerType()).alias('mother_state_of_birth'), \
+#		df_sinasc.TPDOCRESP.cast(IntegerType()).alias('responsible_document_type'), \
+#		df_sinasc.TPFUNCRESP.cast(IntegerType()).alias('responsible_role_type'), \
+
+#campos = """
+#df_sinasc.person_id.alias('person_id'),
+#FSql.lit(1).alias('system_source_id'),
+#FSql.to_timestamp(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias('datasus_person_source_date'), \
+#FSql.lit(ingestion_timestamp).alias('ingestion_timestamp'), \
+#FSql.lit(source_filename).alias('source_file'), \
+#df_sinasc.DTNASCMAE.alias('mother_birth_date_source_value'),
+#FSql.to_date(FSql.lpad(df_sinasc.DTNASCMAE, 10, '0'), 'DDmmyyyy').alias('mother_birth_date'),
+#df_sinasc.ESCMAE.alias('mother_years_of_study'),
+#df_sinasc.ESTCIVMAE.alias('mother_marital_status'),
+#df_sinasc.IDADEMAE.cast(IntegerType()).alias('mother_age'),
+#df_sinasc.CODMUNNATU.cast(IntegerType()).alias('mother_city_of_birth'),
+#df_sinasc.RACACORMAE.alias('mother_race'),
+#df_sinasc.SERIESCMAE.cast(IntegerType()).alias('mother_elementary_school'),
+#df_sinasc.IDADEPAI.cast(IntegerType()).alias('father_age'),
+#df_sinasc.LOCNASC.alias('place_of_birth_type_source_value'),
+#df_sinasc.CODESTAB.cast(IntegerType()).alias('care_site_of_birth_source_value'),
+#df_sinasc.CODOCUPMAE.alias('mother_professional_occupation'),
+#df_sinasc.NATURALMAE.cast(IntegerType()).alias('mother_country_of_origin'),
+#df_sinasc.QTDFILMORT.cast(IntegerType()).alias('number_of_dead_children'),
+#df_sinasc.QTDFILVIVO.cast(IntegerType()).alias('number_of_living_children'),
+#df_sinasc.QTDGESTANT.cast(IntegerType()).alias('number_of_previous_pregnancies'),
+#df_sinasc.QTDPARTCES.cast(IntegerType()).alias('number_of_previous_cesareans'),
+#df_sinasc.QTDPARTNOR.cast(IntegerType()).alias('number_of_previous_normal_born')
+#"""
+#
+#if any(field.name == "ESCMAE2010" for field in df_sinasc.schema.fields):
+#	campos += ", df_sinasc.ESCMAE2010.alias('mother_education_level')"
+#else:
+#	campos += ", FSql.lit(None).cast(StringType()).alias('mother_education_level')"
+#
+#if any(field.name == "ESCMAEAGR1" for field in df_sinasc.schema.fields):
+#	campos += ", df_sinasc.ESCMAEAGR1.alias('mother_education_level_aggregated')"
+#else:
+#	campos += ", FSql.lit(None).cast(StringType()).alias('mother_education_level_aggregated')"
+#
+#if any(field.name == "CODUFNATU" for field in df_sinasc.schema.fields):
+#	campos += ", df_sinasc.CODUFNATU.cast(IntegerType()).alias('mother_state_of_birth')"
+#else:
+#	campos += ", FSql.lit(None).cast(IntegerType()).alias('mother_state_of_birth')"
+#
+#if any(field.name == "TPDOCRESP" for field in df_sinasc.schema.fields):
+#	campos += ", df_sinasc.TPDOCRESP.cast(IntegerType()).alias('responsible_document_type')"
+#else:
+#	campos += ", FSql.lit(None).cast(IntegerType()).alias('responsible_document_type')"
+#
+#if any(field.name == "TPFUNCRESP" for field in df_sinasc.schema.fields):
+#	campos += ", df_sinasc.TPFUNCRESP.cast(IntegerType()).alias('responsible_role_type')"
+#else:
+#	campos += ", FSql.lit(None).cast(IntegerType()).alias('responsible_role_type')"
+#
+#lista_campos = [FSql.expr(campo.strip()) for campo in campos.split(",")]
+#
+#df_datasus_person = spark.createDataFrame(
+#	df_sinasc.select(*lista_campos).rdd,
+#	df_datasus_person_schema
+#)
+
+###################################################################################
+
+		campos = [
+			{"expr": "df_sinasc.person_id", "alias": "person_id"},
+			{"expr": "FSql.lit(1)", "alias": "system_source_id"},
+			{"expr": "FSql.to_timestamp(FSql.lpad(df_sinasc.DTNASC, 8, '0'), 'ddMMyyyy')", "alias": "datasus_person_source_date"},
+			{"expr": "FSql.lit(ingestion_timestamp)", "alias": "ingestion_timestamp"},
+			{"expr": "FSql.lit(source_filename)", "alias": "source_file"},
+			{"expr": "df_sinasc.DTNASCMAE", "alias": "mother_birth_date_source_value"},
+			{"expr": "FSql.to_date(FSql.lpad(df_sinasc.DTNASCMAE, 10, '0'), 'ddMMyyyy')", "alias": "mother_birth_date"},
+			{"expr": "df_sinasc.ESCMAE", "alias": "mother_years_of_study"},
+			{"expr": "df_sinasc.ESTCIVMAE", "alias": "mother_marital_status"},
+			{"expr": "df_sinasc.IDADEMAE.cast(IntegerType())", "alias": "mother_age"},
+			{"expr": "df_sinasc.CODMUNNATU.cast(IntegerType())", "alias": "mother_city_of_birth"},
+			{"expr": "df_sinasc.RACACORMAE", "alias": "mother_race"},
+			{"expr": "df_sinasc.SERIESCMAE.cast(IntegerType())", "alias": "mother_elementary_school"},
+			{"expr": "df_sinasc.IDADEPAI.cast(IntegerType())", "alias": "father_age"},
+			{"expr": "df_sinasc.LOCNASC", "alias": "place_of_birth_type_source_value"},
+			{"expr": "df_sinasc.CODESTAB.cast(IntegerType())", "alias": "care_site_of_birth_source_value"},
+			{"expr": "df_sinasc.CODOCUPMAE", "alias": "mother_professional_occupation"},
+			{"expr": "df_sinasc.NATURALMAE.cast(IntegerType())", "alias": "mother_country_of_origin"},
+			{"expr": "df_sinasc.QTDFILMORT.cast(IntegerType())", "alias": "number_of_dead_children"},
+			{"expr": "df_sinasc.QTDFILVIVO.cast(IntegerType())", "alias": "number_of_living_children"},
+			{"expr": "df_sinasc.QTDGESTANT.cast(IntegerType())", "alias": "number_of_previous_pregnancies"},
+			{"expr": "df_sinasc.QTDPARTCES.cast(IntegerType())", "alias": "number_of_previous_cesareans"},
+			{"expr": "df_sinasc.QTDPARTNOR.cast(IntegerType())", "alias": "number_of_previous_normal_born"}
+		]
+
+		# Adicione as colunas condicionalmente
+		if any(field.name == "ESCMAE2010" for field in df_sinasc.schema.fields):
+			campos.append({"expr": "df_sinasc.ESCMAE2010", "alias": "mother_education_level"})
+		else:
+			campos.append({"expr": "FSql.lit(None).cast(StringType())", "alias": "mother_education_level"})
+
+		if any(field.name == "ESCMAEAGR1" for field in df_sinasc.schema.fields):
+			campos.append({"expr": "df_sinasc.ESCMAEAGR1", "alias": "mother_education_level_aggregated"})
+		else:
+			campos.append({"expr": "FSql.lit(None).cast(StringType())", "alias": "mother_education_level_aggregated"})
+
+		if any(field.name == "CODUFNATU" for field in df_sinasc.schema.fields):
+			campos.append({"expr": "df_sinasc.CODUFNATU.cast(IntegerType())", "alias": "mother_state_of_birth"})
+		else:
+			campos.append({"expr": "FSql.lit(None).cast(IntegerType())", "alias": "mother_state_of_birth"})
+
+		if any(field.name == "TPDOCRESP" for field in df_sinasc.schema.fields):
+			campos.append({"expr": "df_sinasc.TPDOCRESP.cast(IntegerType())", "alias": "responsible_document_type"})
+		else:
+			campos.append({"expr": "FSql.lit(None).cast(IntegerType())", "alias": "responsible_document_type"})
+
+		if any(field.name == "TPFUNCRESP" for field in df_sinasc.schema.fields):
+			campos.append({"expr": "df_sinasc.TPFUNCRESP.cast(IntegerType())", "alias": "responsible_role_type"})
+		else:
+			campos.append({"expr": "FSql.lit(None).cast(IntegerType())", "alias": "responsible_role_type"})
+
+		# Crie a lista de colunas dinamicamente
+		lista_campos = [eval(campo["expr"]).alias(campo["alias"]) for campo in campos]
+
+		# Agora você pode usar 'lista_campos' diretamente na criação do DataFrame
+		df_datasus_person = spark.createDataFrame(df_sinasc.select(*lista_campos).rdd, df_datasus_person_schema)
+
+####################################################################################
+
 
 		# persistindo os dados de observation_period no banco.
 		if df_datasus_person.count() > 0:
 			df_datasus_person.writeTo("bios.rebios.datasus_person").append()
+			logger.info("Table Dataus Person was succesfully updated with SINASC data.")
 
 		logger.info("ETL execution finished with success. Please, check the log file.")
 		# return success
