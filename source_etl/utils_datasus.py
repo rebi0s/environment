@@ -525,6 +525,6 @@ def loadLocationCityRebios(file_path: str, file_name: str, spark: SparkSession, 
             # the show command below is to force the dataframe to be checked against its structure field. The error trap is outside this routine.
             df_location.show()   
             df_location.writeTo("bios.rebios.location").append()
-            logger.info("Cities data succesully written to table LOCATION")
+            logger.info("City data succesully written to table LOCATION")
             df_location.unpersist()
 
