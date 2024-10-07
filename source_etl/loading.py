@@ -322,7 +322,7 @@ if sys.argv[1] == 'ETL':
 				logger.info("Arquivo SINASC não localizado. Carga interrompida.")
 				sys.exit(-1)
 
-		logger.info("Loading file: ", os.path.join(sys.argv[2], sys.argv[3]))
+		logger.info("Loading file: %s ", os.path.join(sys.argv[2], sys.argv[3]))
 		df_sinasc = spark.read.parquet(os.path.join(sys.argv[2], sys.argv[3]))
 		df_sinasc.count()
 		source_filename = os.path.join(sys.argv[2], sys.argv[3])
@@ -864,38 +864,39 @@ if sys.argv[1] == 'ETL':
 		#(df_condition_occur.identity, df_sinasc.identity, 4313474, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.consprenat)""")  # CONSPRENAT	Número de consultas pré‐natal
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
-		df_cond_occur=spark.createDataFrame(df_sinasc.select( \
-		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
-		df_sinasc.person_id.alias('person_id'), \
-		FSql.lit(4313474).cast(LongType()).alias('condition_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
-		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
-		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
-		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
-		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
-		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
-		FSql.lit(None).cast(LongType()).alias('provider_id'), \
-		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
-		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
-		df_sinasc.CONSPRENAT.alias('condition_source_value'), \
-		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
-		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
-		).rdd, df_cond_occur_schema)
+		if any(field.name == "CONSPRENAT" for field in df_sinasc.schema.fields):
+			df_cond_occur=spark.createDataFrame(df_sinasc.select( \
+			FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+			df_sinasc.person_id.alias('person_id'), \
+			FSql.lit(4313474).cast(LongType()).alias('condition_concept_id'), \
+			FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+			FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+			FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+			FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+			FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+			FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+			FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+			FSql.lit(None).cast(LongType()).alias('provider_id'), \
+			FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+			FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+			df_sinasc.CONSPRENAT.alias('condition_source_value'), \
+			FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+			FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+			).rdd, df_cond_occur_schema)
 
-		if df_cond_occur.count() > 0:
-			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
-			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
-			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
-			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
-			# persistindo os dados de observation_period no banco.
-			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
-			logger.info("Table Condition Occurrence [CONSPRENAT] was succesfully updated with SINASC data.")
+			if df_cond_occur.count() > 0:
+				#obtem o max da tabela para usar na inserção de novos registros
+				count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+				count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+				#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+				# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+				# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+				df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+				#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+				df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+				# persistindo os dados de observation_period no banco.
+				df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+				logger.info("Table Condition Occurrence [CONSPRENAT] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  CONDITION_OCCURRENCE - Persistência dos dados 
@@ -1311,45 +1312,46 @@ if sys.argv[1] == 'ETL':
 		#(df_measurement.identity, df_sinasc.identity, 9999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.tprobson, df_sinasc.tprobson)""") # TPROBSON	Código do Grupo de Robson, gerado pelo sistema
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
-		df_measurement=spark.createDataFrame(df_sinasc.select( \
-		FSql.lit(0).cast(LongType()).alias('measurement_id'), \
-		df_sinasc.person_id.alias('person_id'), \
-		FSql.lit(9999987).cast(LongType()).alias('measurement_concept_id'), \
-		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias('measurement_date'), \
-		FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
-		FSql.lit(None).cast(FloatType()).alias('value_as_number'), \
-		FSql.lit(None).cast(TimestampType()).alias('measurement_timestamp'), \
-		FSql.lit(None).cast(TimestampType()).alias('measurement_time'), \
-		FSql.lit(None).cast(LongType()).alias('operator_concept_id'), \
-		FSql.lit(None).cast(LongType()).alias('value_as_concept_id'), \
-		FSql.lit(None).cast(LongType()).alias('unit_concept_id'), \
-		FSql.lit(None).cast(FloatType()).alias('range_low'), \
-		FSql.lit(None).cast(FloatType()).alias('range_high'), \
-		FSql.lit(None).cast(LongType()).alias('provider_id'), \
-		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
-		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
-		df_sinasc.TPROBSON.alias('measurement_source_value'), \
-		FSql.lit(None).cast(LongType()).alias('measurement_source_concept_id'), \
-		FSql.lit(None).cast(StringType()).alias('unit_source_value'), \
-		FSql.lit(None).cast(LongType()).alias('unit_source_concept_id'), \
-		FSql.lit(None).cast(StringType()).alias('value_source_value'), \
-		FSql.lit(None).cast(LongType()).alias('measurement_event_id'), \
-		FSql.lit(None).cast(LongType()).alias('meas_event_field_concept_id') \
-		).rdd, df_measurement_schema)
+		if any(field.name == "TPROBSON" for field in df_sinasc.schema.fields):
+			df_measurement=spark.createDataFrame(df_sinasc.select( \
+			FSql.lit(0).cast(LongType()).alias('measurement_id'), \
+			df_sinasc.person_id.alias('person_id'), \
+			FSql.lit(9999987).cast(LongType()).alias('measurement_concept_id'), \
+			FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias('measurement_date'), \
+			FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
+			FSql.lit(None).cast(FloatType()).alias('value_as_number'), \
+			FSql.lit(None).cast(TimestampType()).alias('measurement_timestamp'), \
+			FSql.lit(None).cast(TimestampType()).alias('measurement_time'), \
+			FSql.lit(None).cast(LongType()).alias('operator_concept_id'), \
+			FSql.lit(None).cast(LongType()).alias('value_as_concept_id'), \
+			FSql.lit(None).cast(LongType()).alias('unit_concept_id'), \
+			FSql.lit(None).cast(FloatType()).alias('range_low'), \
+			FSql.lit(None).cast(FloatType()).alias('range_high'), \
+			FSql.lit(None).cast(LongType()).alias('provider_id'), \
+			FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+			FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+			df_sinasc.TPROBSON.alias('measurement_source_value'), \
+			FSql.lit(None).cast(LongType()).alias('measurement_source_concept_id'), \
+			FSql.lit(None).cast(StringType()).alias('unit_source_value'), \
+			FSql.lit(None).cast(LongType()).alias('unit_source_concept_id'), \
+			FSql.lit(None).cast(StringType()).alias('value_source_value'), \
+			FSql.lit(None).cast(LongType()).alias('measurement_event_id'), \
+			FSql.lit(None).cast(LongType()).alias('meas_event_field_concept_id') \
+			).rdd, df_measurement_schema)
 
-		if df_measurement.count() > 0:
-			#obtem o max da tabela para usar na inserção de novos registros
-			count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.rebios.measurement")
-			count_max_measurement = count_max_measurement_df.first().max_measurement
-			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
-			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
-			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
-			df_measurement = df_measurement.withColumn("measurement_id", monotonically_increasing_id())
-			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
-			df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
-			# persistindo os dados de observation_period no banco.
-			df_measurement.writeTo("bios.rebios.measurement").append()
-			logger.info("Table Measurement Occurrence [TPROBSON] was succesfully updated with SINASC data.")
+			if df_measurement.count() > 0:
+				#obtem o max da tabela para usar na inserção de novos registros
+				count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.rebios.measurement")
+				count_max_measurement = count_max_measurement_df.first().max_measurement
+				#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+				# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+				# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+				df_measurement = df_measurement.withColumn("measurement_id", monotonically_increasing_id())
+				#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+				df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
+				# persistindo os dados de observation_period no banco.
+				df_measurement.writeTo("bios.rebios.measurement").append()
+				logger.info("Table Measurement Occurrence [TPROBSON] was succesfully updated with SINASC data.")
 
 		# *************************************************************
 		#  MEASUREMENT - Persistência dos dados 
