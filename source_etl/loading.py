@@ -51,13 +51,13 @@ logger.info('Spark session started.')
 num_args = len(sys.argv)
 
 if num_args == 1:
-	logger.error("Check the command line usage. A profile with parameters has to be provided. The available choices are: INIT, VOCAB_OMOP, DATASUS, VOCAB_CTRNA, ETL.")
+	logger.error("Check the command line usage. A profile with parameters has to be provided. The available choices are: INIT, VOCAB_OMOP, DATASUS, VOCAB_CTRNA, SINASC.")
 	sys.exit(-1)
 
-profiles = ['INIT','VOCAB_OMOP','DATASUS','VOCAB_CTRNA', 'ETL', 'CLIMATE']
+profiles = ['INIT','VOCAB_OMOP','DATASUS','VOCAB_CTRNA', 'SINASC', 'CLIMATE', 'SIM']
 
 if sys.argv[1] not in profiles:
-	logger.error("Check the command line usage. A profile not valid was used to invoke the script. The available choices are: INIT, VOCAB_OMOP, DATASUS, VOCAB_CTRNA, ETL.")
+	logger.error("Check the command line usage. A profile not valid was used to invoke the script. The available choices are: INIT, VOCAB_OMOP, DATASUS, VOCAB_CTRNA, SINASC, CLIMATE and SIM.")
 	sys.exit(-1)
 
 if sys.argv[1] == 'INIT':
@@ -153,15 +153,15 @@ if sys.argv[1] == 'VOCAB_CTRNA':
 		logger.error("Error while writing CLIMATERNA Vocabulary to OMOP database: ", str(e))
 		sys.exit(-1)
 
-if sys.argv[1] == 'ETL':
+if sys.argv[1] == 'SINASC':
 	try:
 		if num_args != 4:
-			logger.error("Check the command line usage. For ETL the options are as below.")
+			logger.error("Check the command line usage. For SINASC the options are as below.")
 			logger.error("Usage: ")
-			logger.error("   spark-submit loading.py ETL /path_to_folder_with_source_file source_file_name")
+			logger.error("   spark-submit loading.py SINASC /path_to_folder_with_source_file source_file_name")
 			sys.exit(-1)
 
-		logger.info("Initiating ETL processing from source files to OMOP database.")
+		logger.info("Initiating SINASC processing from source files to OMOP database.")
 		####################################################################
 		##  Leitura do arquivo de entrada (source)                        ##
 		####################################################################
@@ -477,6 +477,7 @@ if sys.argv[1] == 'ETL':
 		else:
 			logger.error("Error on processing Person data.")
 			exit(-1)
+
 		# *************************************************************
 		#  OBSERVATION_PERIOD - Persistência dos dados 
 		# *************************************************************
@@ -1799,7 +1800,7 @@ if sys.argv[1] == 'ETL':
 			{"expr": "FSql.lit(ingestion_timestamp)", "alias": "ingestion_timestamp"},
 			{"expr": "FSql.lit(source_filename)", "alias": "source_file"},
 			{"expr": "df_sinasc.DTNASCMAE", "alias": "mother_birth_date_source_value"},
-			{"expr": "FSql.to_date(FSql.lpad(df_sinasc.DTNASCMAE, 10, '0'), 'ddMMyyyy')", "alias": "mother_birth_date"},
+			{"expr": "FSql.to_date(FSql.lpad(df_sinasc.DTNASCMAE, 8, '0'), 'ddMMyyyy')", "alias": "mother_birth_date"},
 			{"expr": "df_sinasc.ESCMAE", "alias": "mother_years_of_study"},
 			{"expr": "df_sinasc.ESTCIVMAE", "alias": "mother_marital_status"},
 			{"expr": "df_sinasc.IDADEMAE.cast(IntegerType())", "alias": "mother_age"},
@@ -1844,10 +1845,8 @@ if sys.argv[1] == 'ETL':
 		else:
 			campos.append({"expr": "FSql.lit(None).cast(IntegerType())", "alias": "responsible_role_type"})
 
-		# Crie a lista de colunas dinamicamente
 		lista_campos = [eval(campo["expr"]).alias(campo["alias"]) for campo in campos]
 
-		# Agora você pode usar 'lista_campos' diretamente na criação do DataFrame
 		df_datasus_person = spark.createDataFrame(df_sinasc.select(*lista_campos).rdd, df_datasus_person_schema)
 
 ####################################################################################
@@ -1858,7 +1857,7 @@ if sys.argv[1] == 'ETL':
 			df_datasus_person.writeTo("bios.rebios.datasus_person").append()
 			logger.info("Table Dataus Person was succesfully updated with SINASC data.")
 
-		logger.info("ETL execution finished with success. Please, check the log file.")
+		logger.info("ETL using SINASC data finished with success. Please, check the log file.")
 		# return success
 		sys.exit(0)
 	except Exception as e:
@@ -2035,5 +2034,1511 @@ if sys.argv[1] == 'CLIMATE':
 
 	except Exception as e:
 		logger.error(f"Fatal error while loading data from SINASC: {str(e)}")
+		#return failure
+		sys.exit(-1)
+
+if sys.argv[1] == 'SIM':
+	try:
+		if num_args != 4:
+			logger.error("Check the command line usage. For SIM the options are as below.")
+			logger.error("Usage: ")
+			logger.error("   spark-submit loading.py SIM /path_to_folder_with_source_file source_file_name")
+			sys.exit(-1)
+
+		logger.info("Initiating SIM processing from source files to OMOP database.")
+		####################################################################
+		##  Leitura do arquivo de entrada (source)                        ##
+		####################################################################
+
+		#carga dos dados do parquet do SIM
+		#source_path = os.getenv("CTRNA_SOURCE_SIM_PATH","/home/etl-rebios/")
+		#arquivo_entrada = "SIM_2010_2022.parquet"
+
+		# leitura do SIM original em formato parquet
+		if not os.path.isfile(os.path.join(sys.argv[2], sys.argv[3])):
+				logger.error("Arquivo SIM não localizado. Carga interrompida.")
+				sys.exit(-1)
+
+		logger.info("Loading file: %s ", os.path.join(sys.argv[2], sys.argv[3]))
+		df_sim = spark.read.parquet(os.path.join(sys.argv[2], sys.argv[3]))
+		df_sim.count()
+		source_filename = os.path.join(sys.argv[2], sys.argv[3])
+		ingestion_timestamp = datetime.now()
+
+# CODESTAB	Código do estabelecimento
+# ATESTADO	CIDs informados no atestado.
+# ATESTANTE	Indica se o medico que assina atendeu o paciente 1: Sim 2: Substituto 3: IML 4: SVO 5: Outros
+# CIRCOBITO	Tipo de morte violenta ou circunstâncias em que se deu a morte não natural. (1 – acidente; 2 – suicídio; 3 – homicídio; 4 – outros; 9 – ignorado)
+# CIRURGIA	Realização de cirurgia. (1 – sim; 2 – não; 9 – ignorado)
+# GESTACAO	Faixas de semanas de gestação (1 - Menos de 22 semanas; 2 - 22 a 27 semanas; 3 - 28 a 31 semanas; 4 - 32 a 36 semanas; 5 - 37 a 41 semanas; 6 - 42 e + semanas)
+# GRAVIDEZ	Tipo de gravidez. (1 – única; 2 – dupla; 3 – tripla e mais; 9 – ignorada)
+# OBITOGRAV	Óbito na gravidez. (1 – sim; 2 – não; 9 – ignorado)
+# OBITOPARTO	Momento do óbito em relação ao parto. (1 - antes; 2– durante; 3–depois; 9– Ignorado)
+# OBITOPUERP	Óbito no puerpério. (1 – Sim, até 42 dias após o parto; 2 – Sim, de 43 dias a 1 ano; 3 – Não; 9 – Ignorado)
+# SEMAGESTAC	Numero de registro do óbito
+# STCODIFICA	Status de instalação. (Se codificadora (valor: S) ou não (valor: N))
+# STDOEPIDEM	Status de DO Epidemiológica. (1 - Sim; 0 - Não)
+# STDONOVA	Status de DO Nova. (1 - Sim; 0 - Não)
+# TIPOBITO	"Óbito fetal, morte antes da expulsão ou da extração completa do corpo da Mãe, independentemente da duração da gravidez. (1-Fetal; 2-Não Fetal)"
+# TPMORTEOCO	Situação gestacional ou pósgestacional em que ocorreu o óbito. (1 – na gravidez; 2 – no parto; 3 – no abortamento; 4 – até 42 dias após o término do parto; 5 – de 43 dias a 1 ano após o término da gestação ; 8 – não ocorreu nestes períodos; 9 – ignorado)
+# ACIDTRAB	Indica se o evento que desencadeou o óbito está relacionado ao processo de trabalho. (1 – sim; 2 – não; 9 – ignorado)
+# ALTCAUSA	Indica se houve correção ou alteração da causa do óbito após investigação. (1- Sim; 2 – Não)
+# ASSISTMED	Se refere ao atendimento médico continuado que o paciente recebeu, ou não, durante a enfermidade que ocasionou o óbito. (1 – sim; 2 – não; 9 – ignorado)
+# CODBAIOCOR	codigo do bairro de ocorrencia
+# CODMUNNATU	Código do município de naturalidade do falecido
+# CODMUNOCOR	Código relativo ao município onde ocorreu o óbito.
+# COMUNSVOIM	Código do município do SVO ou do IML
+# DTCADINF	Quando preenchido indica se a investigação foi realizada. (Data no padrão ddmmaaaa)
+# ESC	Escolaridade em anos. (1 – Nenhuma; 2 – de 1 a 3 anos; 3 – de 4 a 7 anos; 4 – de 8 a 11 anos; 5 – 12 anos e mais; 9 – Ignorado)
+# ESC2010	Escolaridade 2010. Nível da última série concluída pelo falecido. (0 – Sem escolaridade; 1 – Fundamental I (1ª a 4ª série); 2 – Fundamental II (5ª a 8ª série); 3 – Médio (antigo 2º Grau); 4 – Superior incompleto; 5 – Superior completo; 9 – Ignorado)
+# ESCFALAGR1	Escolaridade do falecido agregada (formulário a partir de 2010). (00 – Sem Escolaridade; 01 – Fundamental I Incompleto; 02 – Fundamental I Completo; 03 – Fundamental II Incompleto; 04 – Fundamental II Completo; 05 – Ensino Médio Incompleto; 06 – Ensino Médio Completo; 07 – Superior Incompleto; 08 – Superior Completo; 09 – Ignorado; 10 – Fundamental I Incompleto ou Inespecífico; 11 – Fundamental II Incompleto ou Inespecífico; 12 – Ensino Médio Incompleto ou Inespecífico)
+# ESCMAE	Escolaridade da mãe em anos. (1 – Nenhuma; 2 – de 1 a 3 anos; 3 – de 4 a 7 anos; 4 – de 8 a 11 anos; 5 – 12 anos e mais; 9 – Ignorado)
+# ESCMAE2010	Escolaridade 2010. Nível da última série concluída pela mãe. (0 – Sem escolaridade; 1 – Fundamental I (1ª a 4ª série); 2 – Fundamental II (5ª a 8ª série); 3 – Médio (antigo 2º Grau); 4 – Superior incompleto; 5 – Superior completo; 9 – Ignorado)
+# ESCMAEAGR1	Escolaridade da mãe agregada (formulário a partir de 2010). (00 – Sem Escolaridade; 01 – Fundamental I Incompleto; 02 – Fundamental I Completo; 03 – Fundamental II Incompleto; 04 – Fundamental II Completo; 05 – Ensino Médio Incompleto; 06 – Ensino Médio Completo; 07 – Superior Incompleto; 08 – Superior Completo; 09 – Ignorado; 10 – Fundamental I Incompleto ou Inespecífico; 11 – Fundamental II Incompleto ou Inespecífico; 12 – Ensino Médio Incompleto ou Inespecífico)
+# ESTCIV	Situação conjugal do falecido informada pelos familiares. (1 – Solteiro; 2 – Casado; 3 – Viúvo; 4 – Separado judicialmente/divorciado; 5 – União estável; 9 – Ignorado)
+# IDADE	Idade do falecido em minutos, horas, dias, meses ou anos. (Idade: compostode dois subcampos. - O primeiro, de 1 dígito, indica a unidade da idade (se 1= minuto, se 2 = hora, se 3 = mês, se 4 = ano, se = 5 idade maior que 100anos). - O segundo, de dois dígitos, indica a quantidade de unidades: Idademenor de 1 hora: subcampo varia de 01 e 59 (minutos); De 1 a 23 Horas:subcampo varia de 01 a 23 (horas); De 24 horas e 29 dias: subcampo variade 01 a 29 (dias); De 1 a menos de 12 meses completos: subcampo varia de01 a 11 (meses); Anos - subcampo varia de 00 a 99; - 9 - ignorado)
+# IDADEanos	Idade do falecido em minutos, horas, dias, meses ou anos. (Idade: composto de dois subcampos. - O primeiro, de 1 dígito, indica a unidade da idade (se 1 = minuto, se 2 = hora, se 3 = mês, se 4 = ano, se = 5 idade maior que 100 anos). - O segundo, de dois dígitos, indica a quantidade de unidades: Idade menor de 1 hora: subcampo varia de 01 e 59 (minutos); De 1 a 23 Horas: subcampo varia de 01 a 23 (horas); De 24 horas e 29 dias: subcampo varia de 01 a 29 (dias); De 1 a menos de 12 meses completos: subcampo varia de 01 a 11 (meses); Anos - subcampo varia de 00 a 99; - 9 - ignorado)
+# IDADEdias	Idade do falecido em minutos, horas, dias, meses ou anos. (Idade: composto de dois subcampos. - O primeiro, de 1 dígito, indica a unidade da idade (se 1 = minuto, se 2 = hora, se 3 = mês, se 4 = ano, se = 5 idade maior que 100 anos). - O segundo, de dois dígitos, indica a quantidade de unidades: Idade menor de 1 hora: subcampo varia de 01 e 59 (minutos); De 1 a 23 Horas: subcampo varia de 01 a 23 (horas); De 24 horas e 29 dias: subcampo varia de 01 a 29 (dias); De 1 a menos de 12 meses completos: subcampo varia de 01 a 11 (meses); Anos - subcampo varia de 00 a 99; - 9 - ignorado)
+# IDADEhoras	Idade do falecido em minutos, horas, dias, meses ou anos. (Idade: composto de dois subcampos. - O primeiro, de 1 dígito, indica a unidade da idade (se 1 = minuto, se 2 = hora, se 3 = mês, se 4 = ano, se = 5 idade maior que 100 anos). - O segundo, de dois dígitos, indica a quantidade de unidades: Idade menor de 1 hora: subcampo varia de 01 e 59 (minutos); De 1 a 23 Horas: subcampo varia de 01 a 23 (horas); De 24 horas e 29 dias: subcampo varia de 01 a 29 (dias); De 1 a menos de 12 meses completos: subcampo varia de 01 a 11 (meses); Anos - subcampo varia de 00 a 99; - 9 - ignorado)
+# IDADEMAE	idade da mãe
+# IDADEmeses	Idade do falecido em minutos, horas, dias, meses ou anos. (Idade: composto de dois subcampos. - O primeiro, de 1 dígito, indica a unidade da idade (se 1 = minuto, se 2 = hora, se 3 = mês, se 4 = ano, se = 5 idade maior que 100 anos). - O segundo, de dois dígitos, indica a quantidade de unidades: Idade menor de 1 hora: subcampo varia de 01 e 59 (minutos); De 1 a 23 Horas: subcampo varia de 01 a 23 (horas); De 24 horas e 29 dias: subcampo varia de 01 a 29 (dias); De 1 a menos de 12 meses completos: subcampo varia de 01 a 11 (meses); Anos - subcampo varia de 00 a 99; - 9 - ignorado)
+# IDADEminutos	Idade do falecido em minutos, horas, dias, meses ou anos. (Idade: composto de dois subcampos. - O primeiro, de 1 dígito, indica a unidade da idade (se 1 = minuto, se 2 = hora, se 3 = mês, se 4 = ano, se = 5 idade maior que 100 anos). - O segundo, de dois dígitos, indica a quantidade de unidades: Idade menor de 1 hora: subcampo varia de 01 e 59 (minutos); De 1 a 23 Horas: subcampo varia de 01 a 23 (horas); De 24 horas e 29 dias: subcampo varia de 01 a 29 (dias); De 1 a menos de 12 meses completos: subcampo varia de 01 a 11 (meses); Anos - subcampo varia de 00 a 99; - 9 - ignorado)
+# MORTEPARTO	Momento do óbito em relação ao parto. (1 - antes; 2– durante; 3–depois; 9– Ignorado)
+# NUDIASOBCO	Diferença entre a data óbito e a data conclusão da investigação, em dias.
+# NUMERODN	numero declaração nascidos vivos
+# OCUP	Tipo de trabalho que o falecido desenvolveu na maior parte de sua vida produtiva.
+# OCUPMAE	Trabalho exercido pela mãe
+# QTDFILMORT	qtd filhos mortos (9-ignorado)
+# QTDFILVIVO	número de filhos vivos (9-ignorado)
+# SERIESCFAL	Última série escolar concluída pelo falecido. (Números de 1 a 8)
+# SERIESCMAE	Última série escolar concluída pela mãe. (Números de 1 a 8)
+# TPNIVELINV	Tipo de nível investigador. (E – estadual; R- regional; M- Municipal)
+# TPOBITOCOR	Momento da ocorrência do óbito. (1-Durante a gestação, 2- Durante o abortamento, 3- Após o abortamento , 4- No parto ou até 1 hora após o parto, 5- No puerpério - até 42 dias após o parto, 6- Entre 43 dias e até 1 ano após o parto, 7- A investigação não identificou o momento do óbito, 8- Mais de um ano após o parto , 9- O óbito não ocorreu nas circunstancias anteriores, Branco - Não investigado)
+# TPPOS	Óbito investigado. (1 – sim; 2 – não)
+# TPRESGINFO	Informa se a investigação permitiu o resgate de alguma causa de óbito não informado, ou a correção de alguma antes informada. (01 - Não acrescentou 2014 (C 10) nem corrigiu informação; 02 - Sim, permitiu o resgate de novas informações; 03 - Sim, permitiu a correção de alguma das causas informadas originalmente)
+# CAUSABAS	causa básica da DO
+# CAUSABAS_O	Causa básica informada antes da resseleção.
+# CAUSAMAT	CID da causa externa associada a uma causa materna.
+# CB_PRE	Causa básica informada antes da resseleção (localidade)
+# CRM	Número de inscrição do Médico atestante no Conselho Regional de Medicina
+# HORAOBITO	Horário do óbito (padrão 24h 00:00)
+# CODBAIRES	Código do Bairro de residência
+# PESO	peso em gramas ao nascer
+# DTATESTADO	data do atestado
+# DTCADASTRO	Data do cadastro do óbito. ddmmaaaa
+# UFINFORM	Código da UF que informou o registro
+# CODMUNRES	Código do município de residência
+# DTNASC	Data do nascimento do falecido
+# LOCOCOR	Local de ocorrência do óbito. (1 – hospital; 2 – outros estabelecimentos de saúde; 3 – domicílio; 4 – via pública; 5 – outros; 6 - aldeia indígena; 9 – ignorado).
+# NATURAL	País e Unidade da Federação onde falecido nasceu. Se estrangeiro informar País. (Números)
+# ORIGEM	Origem do registro. (1- Oracle; 2 - Banco estadual diponibilizado via FTP; 3 - Banco SEADE; 9 - Ignorado)
+# RACACOR	Cor informada pelo responsável pelas informações do falecido. (1 – Branca; 2 – Preta; 3 – Amarela; 4 – Parda; 5 – Indígena)
+# SEXO	Sexo do falecido (M – masculino; F – feminino; I - ignorado) 
+# EXAME	Realização de exame. (1 – sim; 2 – não; 9 – ignorado)
+# LINHAA	CIDs informados na Linha A da DO referente ao diagnóstico na Linha A da DO (causa terminal - doença ou estado mórbido que causou diretamente a morte). (Códigos CID 10)
+# LINHAB	CIDs informados na Linha B da DO referente ao diagnóstico na Linha B da DO (causa antecedente ou conseqüencial - estado mórbido, se existir, que produziu a causa direta da morte registrada na linha A)
+# LINHAC	CIDs informados na Linha C da DO referente ao diagnóstico na Linha C da DO (causa antecedente ou conseqüencial - estado mórbido, se existir, que produziu a causa direta da morte registrada na linha A).
+# LINHAD	CIDs informados na Linha D da DO referente ao diagnóstico na Linha D da DO (causa básica – estado mórbido, se existir, que produziu a causa direta da morte registrada na linha A).
+# LINHAII	CIDs informados na Parte II da DO referente ao diagnóstico na Parte II da DO (causa contribuinte - outras condições significativas que contribuíram para a morte e que não entraram na cadeia definida na Parte I
+# NECROPSIA	realização de necropsia (1 - sim;2-não;9-ignorado)
+# NUDIASOBIN	
+# PARTO	Tipo de parto. (1 – vaginal; 2 – cesáreo; 9 – ignorado)
+# FONTE	fonte de informação utilizada para o preenchimento dos campos 48 e 49. (1 – ocorrência policial; 2 – hospital; 3 – família; 4 – outra; 9 – ignorado)
+# FONTEINV	Fonte de investigação. (1 – Comitê de Morte Materna e/ou Infantil; 2 – Visita domiciliar / Entrevista família; 3 – Estabelecimento de Saúde / Prontuário; 4 – Relacionado com outros bancos de dados; 5 – S V O; 6 – I M L; 7 – Outra fonte; 8 – Múltiplas fontes; 9 – Ignorado)
+# DTCADINV	Data do cadastro de investigação. (Data no padrão ddmmaaaa)
+# DTCONCASO	Data de conclusão do caso
+# DTCONINV	Data da conclusão da investigação
+# DTINVESTIG	Data da investigação do óbito. ddmmaaaa
+# DTOBITO	Data que ocorreu o obito (DDMMAAAA)
+
+		# column HORANASC is presenting null values on source file and that will be filled with 0000
+		df_sim=df_sim.fillna({"HORAOBITO": "0000"})
+
+		# column DATANASC is presenting null values on source file and those records will be discarded
+		df_sim=df_sim.filter((df_sim["DTOBITO"].isNull() == False) & (df_sim["DTOBITO"].rlike("^[0-9]{8}$")))
+		#df_sim=df_sim.filter((df_sim["HORANASC"].isNull() == False))
+		#df_sim=df_sim.filter((df_sim["HORANASC"].rlike("^[0-9]{4}$")) & (~df_sim["HORANASC"].rlike("[^0-9]")))
+		#df_sim=df_sim.filter((df_sim["HORANASC"] <= 2359))
+		df_sim = df_sim.withColumn("HORAOBITO", FSql.when(((df_sim["HORAOBITO"] > 2359) | ~(df_sim["HORAOBITO"].rlike("^[0-9]{4}$")) | (~df_sim["HORAOBITO"].rlike("[^0-9]"))) == True, "0000").otherwise(df_sim["HORAOBITO"]))
+
+
+        # |-- LOCNASC <- as.factor(.data$LOCNASC): string (nullable = true)
+        # |-- IDADEMAE <- as.factor(.data$IDADEMAE): string (nullable = true)
+        # |-- ESTCIVMAE <- as.factor(.data$ESTCIVMAE): string (nullable = true)
+        # |-- ESCMAE <- as.factor(.data$ESCMAE): string (nullable = true)
+        # |-- CODOCUPMAE: string (nullable = true)
+        # |-- GESTACAO <- as.factor(.data$GESTACAO): string (nullable = true)
+        # |-- PARTO <- as.factor(.data$PARTO): string (nullable = true)
+
+
+		####################################################################
+		##  Carrega em memória os cadastros                               ##
+		####################################################################
+
+		# Table location 
+		# location_id  ,
+		# address_1  ,
+		# address_2  ,
+		# city  ,
+		# state ,
+		# zip ,
+		# county  ,
+		# location_source_value  ,
+		# country_concept_id  ,
+		# country_source_value ,
+		# latitude,
+		# longitude)
+
+		# df_teste = spark.sql(f"SELECT * FROM {CATALOG_NAME}.{db.name}.{table.name} LIMIT 5")
+
+        # dataframe with records of Type Of Health Unit
+		#df_cnes_tpunid = spark.read.format("iceberg").load(f"bios.rebios.type_of_unit")
+		# dataframe with existing location records representing only cities
+		logger.info("Loading info from Locations...")
+		df_location = spark.read.format("iceberg").load(f"bios.rebios.location").filter(FSql.col("county").isNotNull())
+		# dataframe with existing care_sites
+		logger.info("Loading info from Care Sites...")
+		df_care_site = spark.read.format("iceberg").load(f"bios.rebios.care_site")
+		# dataframe with existing providers
+		logger.info("Loading info from Providers...")
+		df_provider = spark.read.format("iceberg").load(f"bios.rebios.provider")
+
+		# dataframe with concept records
+		#df_concept = spark.read.format("iceberg").load(f"bios.rebios.concept")
+
+		#obtem o max person_id para usar na inserção de novos registros
+		count_max_person_df = spark.sql("SELECT greatest(max(person_id),0) + 1 AS max_person FROM bios.rebios.person")
+		count_max_person = count_max_person_df.first().max_person
+		#geração dos id's únicos nos dados de entrada. O valor inicial é 0.
+		# a função monotonically_increasing_id() gera números incrementais com a garantia de ser sempre maior que os existentes.
+		df_sim = df_sim.withColumn("person_id", monotonically_increasing_id())
+		#sincroniza os id's gerados com o max(person_id) existente no banco de dados atualizando os registros no df antes de escrever no banco
+		df_sim = df_sim.withColumn("person_id", df_sim["person_id"] + count_max_person)
+
+		# esses df's poderão conter valores nulos para município e estabelecimento de saúde, caso não haja cadastro.
+		# a partir da coluna person_id, os registros de entrada se tornam unicamente identificados.
+		# left outer join entre SIM e location para associar dados de município
+		#df_sim_location = (df_sim.join(df_location, on=['df_sim.CODMUNRES == df_location.location_id'], how='left'))
+		df_sim = (df_sim.join(df_location, [df_sim.CODMUNRES == df_location.location_source_value.substr(1, 6)], 'left'))
+		df_sim = df_sim.withColumnRenamed("location_id","location_id_city")
+		# left outer join entre SIM e care site para associar dados de estabelecimento de saúde
+		df_sim = (df_sim.join(df_care_site, [df_sim.CODESTAB == df_care_site.care_site_source_value], 'left'))
+		df_sim = df_sim.withColumnRenamed("location_id","location_id_care_site")
+
+		#####  CRIAR O DF PARA CONTENDO O PERSON_ID E O CID10 CORRESPONDENTE
+		# left outer join entre SIM e vocabulário para associar dados de 
+		#df_sim_cid10 = (df_sim.join(df_concept, on=['df_sim.codmunres == df_concept.location_id'], how='left'))
+
+		# tratamento para resolver a falta de FK's antes da inserção no banco
+		# inserir novos municípios 
+
+		# inserir novos estabelecimentos de saúde
+
+		# *************************************************************
+		#  PERSON - Persistência dos dados 
+		# *************************************************************
+		# Definindo o novo esquema para suportar valores nulos e não-nulos.
+		df_person_schema = StructType([ \
+			StructField("person_id", LongType(), False), \
+			StructField("gender_concept_id", LongType(), False), \
+			StructField("year_of_birth", IntegerType(), False), \
+			StructField("month_of_birth", IntegerType(), True), \
+			StructField("day_of_birth", IntegerType(), True), \
+			StructField("birth_timestamp", TimestampType(), True), \
+			StructField("race_concept_id", LongType(), False), \
+			StructField("ethnicity_concept_id", LongType(), False), \
+			StructField("location_id", LongType(), True), \
+			StructField("provider_id", LongType(), True), \
+			StructField("care_site_id", LongType(), True), \
+			StructField("person_source_value", StringType(), True), \
+			StructField("gender_source_value", StringType(), True), \
+			StructField("gender_source_concept_id", LongType(), True), \
+			StructField("race_source_value", StringType(), True), \
+			StructField("race_source_concept_id", LongType(), True), \
+			StructField("ethnicity_source_value", StringType(), True), \
+			StructField("ethnicity_source_concept_id", LongType(), True) \
+		])
+
+		logger.info("Processing Person data...")
+		df_person = spark.createDataFrame(df_sim.select(
+			FSql.col("person_id"),
+			FSql.when((FSql.col("SEXO") == 'M') | (FSql.col("SEXO") == '1') | (FSql.col("SEXO") == 'Masculino'), 8507)
+			.when((FSql.col("SEXO") == 'F') | (FSql.col("SEXO") == '2') | (FSql.col("SEXO") == 'Feminino'), 8532)
+			.otherwise(8551).alias("gender_concept_id"),
+			FSql.coalesce(FSql.year(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTOBITO"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORAOBITO"), FSql.lit('0000')), 4, '0')), 'ddMMyyyy HHmm')), FSql.lit('0000').cast(IntegerType())).alias("year_of_birth"),
+			FSql.coalesce(FSql.month(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTOBITO"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORAOBITO"), FSql.lit('0000')), 4, '0')), 'ddMMyyyy HHmm')), FSql.lit('00').cast(IntegerType())).alias("month_of_birth"),
+			FSql.coalesce(FSql.dayofmonth(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTOBITO"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORAOBITO"), FSql.lit('0000')), 4, '0')), 'ddMMyyyy HHmm')), FSql.lit('00').cast(IntegerType())).alias("day_of_birth"),
+			FSql.to_timestamp(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTOBITO"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORAOBITO"), FSql.lit('0000')), 4, '0')), 'ddMMyyyy HHmm')).alias("birth_timestamp"),
+			FSql.when ((FSql.col("RACACOR") == 1) | (FSql.col("RACACOR") == 'Branca'), 3212942)
+			.when((FSql.col("RACACOR") == 2) | (FSql.col("RACACOR") == 'Preta'), 3213733)
+			.when((FSql.col("RACACOR") == 3) | (FSql.col("RACACOR") == 'Amarela'), 3213498)
+			.when((FSql.col("RACACOR") == 4) | (FSql.col("RACACOR") == 'Parda'), 3213487)
+			.when((FSql.col("RACACOR") == 5) | (FSql.col("RACACOR") == 'Indígena'), 3213694)
+			.otherwise(763013).alias("race_concept_id"),
+			FSql.lit(38003563).alias('ethnicity_concept_id'),
+			FSql.col("location_id_city").alias('location_id'),
+			FSql.lit(None).cast(StringType()).alias('provider_id'),
+			FSql.col("care_site_id").alias('care_site_id'),
+			FSql.lit(None).cast(StringType()).alias('person_source_value'),
+			FSql.col("SEXO").alias('gender_source_value'),
+			FSql.lit(None).cast(StringType()).alias('gender_source_concept_id'),
+			FSql.coalesce(FSql.col("RACACOR"), FSql.lit('Nulo')).alias('race_source_value'),
+			FSql.lit(None).cast(StringType()).alias('race_source_concept_id'),
+			FSql.lit(None).cast(StringType()).alias('ethnicity_source_value'),
+			FSql.lit(None).cast(StringType()).alias('ethnicity_source_concept_id')
+		).rdd, df_person_schema)
+
+
+		if df_person.count() > 0:
+			# Persistindo os dados de person no banco.
+			df_person.show()
+			df_person.writeTo("bios.rebios.person").append()
+			logger.info("Table Person was succesfully updated with SIM data.")
+		else:
+			logger.error("Error on processing Person data.")
+			exit(-1)
+
+		df_death_schema = StructType([ \
+			StructField("person_id", LongType(), False), \
+			StructField("death_date", TimestampType(), False), \
+			StructField("death_timestamp", TimestampType(), True), \
+			StructField("death_type_concept_id", LongType(), True), \
+			StructField("cause_concept_id", LongType(), True), \
+			StructField("cause_source_value", StringType(), True), \
+			StructField("cause_source_concept_id", LongType(), True) \
+		])
+
+		logger.info("Processing Death data...")
+		df_person = spark.createDataFrame(df_sim.select(
+			FSql.col("person_id"),
+			FSql.to_timestamp(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTOBITO"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORAOBITO"), FSql.lit('0000')), 4, '0')), 'ddMMyyyy HHmm')).alias("death_date"),
+			FSql.to_timestamp(FSql.to_timestamp(FSql.concat(FSql.lpad(FSql.col("DTOBITO"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.coalesce(FSql.col("HORAOBITO"), FSql.lit('0000')), 4, '0')), 'ddMMyyyy HHmm')).alias("death_timestamp"),
+			FSql.lit(None).cast(LongType()).alias('death_type_concept_id'),
+			FSql.lit(None).cast(LongType()).alias('cause_concept_id'),
+			FSql.col("CAUSABAS").cast(StringType()).alias('cause_source_value'),
+			FSql.lit(None).cast(LongType()).alias('cause_source_concept_id')
+		).rdd, df_person_schema)
+
+		if df_person.count() > 0:
+			# Persistindo os dados de person no banco.
+			df_person.show()
+			df_person.writeTo("bios.rebios.death").append()
+			logger.info("Table Death was succesfully updated with SIM data.")
+		else:
+			logger.error("Error on processing Death data.")
+			exit(-1)
+
+		df_datasus_death_schema = StructType([ \
+			StructField("person_id", LongType(), False), \
+			StructField("system_source_id", IntegerType(), False), \
+			StructField("datasus_person_source_date", TimestampType(), False), \
+			StructField("ingestion_timestamp", TimestampType(), False), \
+			StructField("source_file", StringType(), False), \
+			StructField("defunct_job_related_death", IntegerType(), True), \
+			StructField("death_reason_changed", IntegerType(), True), \
+			StructField("defunct_in_continuous_treatment", IntegerType(), True), \
+			StructField("defunct_city_of_birth", IntegerType(), True), \
+			StructField("defunct_city_of_death", IntegerType(), True), \
+			StructField("autopsy_city", IntegerType(), True), \
+			StructField("death_investigation_date", TimestampType(), True), \
+			StructField("defunct_years_of_study", StringType(), True), \
+			StructField("defunct_education_level", StringType(), True), \
+			StructField("defunct_education_level_aggregated", StringType(), True), \
+			StructField("mother_years_of_study", StringType(), True), \
+			StructField("mother_education_level", StringType(), True), \
+			StructField("mother_education_level_aggregated", StringType(), True), \
+			StructField("defunct_marital_status", StringType(), True), \
+			StructField("defunct_age", IntegerType(), True), \
+			StructField("mother_age", IntegerType(), True), \
+			StructField("birth_death", IntegerType(), True), \
+			StructField("defunct_main_occupation", IntegerType(), True), \
+			StructField("mother_professional_occupation", IntegerType(), True), \
+			StructField("number_of_dead_children", IntegerType(), True), \
+			StructField("number_of_living_children", IntegerType(), True), \
+			StructField("defunct_elementary_school", IntegerType(), True), \
+			StructField("mother_elementary_school", IntegerType(), True), \
+			StructField("death_investigation_level", IntegerType(), True), \
+			StructField("death_occurrence_time", IntegerType(), True), \
+			StructField("death_invstigated", IntegerType(), True), \
+			StructField("death_additional_info", IntegerType(), True), \
+			StructField("investigation_source", IntegerType(), True), \
+			StructField("investigation_register_date", TimestampType(), True), \
+			StructField("investigation_case_conclusion_date", TimestampType(), True), \
+			StructField("investigation_conclusion_date", TimestampType(), True), \
+			StructField("investigation_date", TimestampType(), True), \
+			StructField("type_place_of_death", IntegerType(), True) \
+		])
+
+
+		campos = [
+			{"expr": "df_sim.person_id", "alias": "person_id"},
+			{"expr": "df_sim.FONTE", "alias": "system_source_id"},
+			{"expr": "FSql.to_timestamp(FSql.lpad(df_sim.DTOBITO, 8, '0'), 'ddMMyyyy')", "alias": "datasus_person_source_date"},
+			{"expr": "FSql.lit(ingestion_timestamp)", "alias": "ingestion_timestamp"},
+			{"expr": "FSql.lit(source_filename)", "alias": "source_file"},
+			{"expr": "df_sim.ACIDTRAB.cast(IntegerType())", "alias": "defunct_job_related_death"},
+			{"expr": "df_sim.ALTCAUSA.cast(IntegerType())", "alias": "death_reason_changed"},
+			{"expr": "df_sim.ASSISTMED.cast(IntegerType())", "alias": "defunct_in_continuous_treatment"},
+			{"expr": "df_sim.CODMUNNATU.cast(IntegerType())", "alias": "defunct_city_of_birth"},
+			{"expr": "df_sim.CODMUNOCOR.cast(IntegerType())", "alias": "defunct_city_of_death"},
+			{"expr": "df_sim.COMUNSVOIM.cast(IntegerType())", "alias": "autopsy_city"},
+			{"expr": "FSql.to_date(FSql.lpad(df_sim.DTCADINF, 8, '0'), 'ddMMyyyy')", "alias": "death_investigation_date"},
+			{"expr": "df_sim.ESC", "alias": "defunct_years_of_study"},
+			{"expr": "df_sim.ESC2010", "alias": "defunct_education_level"},
+			{"expr": "df_sim.ESCFALAGR1", "alias": "defunct_education_level_aggregated"},
+			{"expr": "df_sim.ESCMAE", "alias": "mother_years_of_study"},
+			{"expr": "df_sim.ESCMAE2010", "alias": "mother_education_level"},
+			{"expr": "df_sim.ESCMAEAGR1", "alias": "mother_education_level_aggregated"},
+			{"expr": "df_sim.ESTCIV", "alias": "defunct_marital_status"},
+			{"expr": "df_sim.IDADE", "alias": "defunct_age"},
+			{"expr": "df_sim.IDADEMAE", "alias": "mother_age"},
+			{"expr": "df_sim.MORTEPARTO", "alias": "birth_death"},
+			{"expr": "df_sim.OCUP", "alias": "defunct_main_occupation"},
+			{"expr": "df_sim.OCUPMAE", "alias": "mother_professional_occupation"},
+			{"expr": "df_sim.QTDFILMORT", "alias": "number_of_dead_children"},
+			{"expr": "df_sim.QTDFILVIVO", "alias": "number_of_living_children"},
+			{"expr": "df_sim.SERIESCFAL", "alias": "defunct_elementary_school"},
+			{"expr": "df_sim.SERIESCMAE", "alias": "mother_elementary_school"},
+			{"expr": "df_sim.TPNIVELINV", "alias": "death_investigation_level"},
+			{"expr": "df_sim.TPOBITOCOR", "alias": "death_occurrence_time"},
+			{"expr": "df_sim.TPPOS", "alias": "death_invstigated"},
+			{"expr": "df_sim.TPRESGINFO", "alias": "death_additional_info"},
+			{"expr": "df_sim.FONTEINV.cast(IntegerType())", "alias": "investigation_source"},
+			{"expr": "FSql.to_date(FSql.lpad(df_sim.DTCADINV, 8, '0'), 'ddMMyyyy')", "alias": "investigation_register_date"},
+			{"expr": "FSql.to_date(FSql.lpad(df_sim.DTCONCASO, 8, '0'), 'ddMMyyyy')", "alias": "investigation_case_conclusion_date"},
+			{"expr": "FSql.to_date(FSql.lpad(df_sim.DTCONINV, 8, '0'), 'ddMMyyyy')", "alias": "investigation_conclusion_date"},
+			{"expr": "FSql.to_date(FSql.lpad(df_sim.DTINVESTIG, 8, '0'), 'ddMMyyyy')", "alias": "investigation_date"},
+			{"expr": "df_sim.LOCOCOR.cast(IntegerType())", "alias": "type_place_of_death"}
+		]
+
+		lista_campos = [eval(campo["expr"]).alias(campo["alias"]) for campo in campos]
+
+		df_datasus_death = spark.createDataFrame(df_sim.select(*lista_campos).rdd, df_datasus_death_schema)
+
+		if df_datasus_person.count() > 0:
+			df_datasus_person.writeTo("bios.rebios.datasus_death").append()
+			logger.info("Table Datasus Death was succesfully updated with SIM data.")
+
+		# *************************************************************
+		#  CONDITION_OCCURRENCE - Persistência dos dados 
+		#  A partir de um registro do source serão inseridos vários registros na tabela condition_occurrence, por isso, o dataframe é recriado trocando o campo de entrada.
+		#  Source field: ATESTADO
+		# *************************************************************
+		#spark.sql("""insert into condition_occurrence(condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_type_concept_id, condition_source_value)
+		#values
+		#(df_condition_occur.identity, df_sinasc.identity, when df_sinasc.stdnepidem = 1 then 9999999 else 999999, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.stdnepidem)""") # STDNEPIDEM	Status de DN Epidemiológica. Valores: 1 – SIM; 0 – NÃO.
+
+		# Definindo o novo esquema para suportar valores nulos e não-nulos.
+		df_cond_occur_schema = StructType([ \
+		StructField("condition_occurrence_id", LongType(), False), \
+		StructField("person_id", LongType(), False), \
+		StructField("condition_concept_id", LongType(), False), \
+		StructField("condition_start_date", DateType(), False), \
+        StructField("condition_start_timestamp", TimestampType(), True), \
+		StructField("condition_end_date", DateType(), True), \
+        StructField("condition_end_timestamp", TimestampType(), True), \
+		StructField("condition_type_concept_id", LongType(), False), \
+		StructField("condition_status_concept_id", LongType(), True), \
+		StructField("stop_reason", StringType(), True), \
+		StructField("provider_id", LongType(), True), \
+		StructField("visit_occurrence_id", LongType(), True), \
+		StructField("visit_detail_id", LongType(), True), \
+		StructField("condition_source_value", StringType(), True), \
+		StructField("condition_source_concept_id", LongType(), True), \
+		StructField("condition_status_source_value", StringType(), True)
+		])
+
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_cond_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.when(df_sim['ATESTADO'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.ATESTADO.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
+		if df_cond_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+			# persistindo os dados de observation_period no banco.
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [ATESTADO] was succesfully updated with SIM data.")
+
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_cond_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.when(df_sim['ATESTANTE'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		df_sim.CRM.cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.ATESTANTE.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
+		if df_cond_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+			# persistindo os dados de observation_period no banco.
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [ATESTANTE] was succesfully updated with SIM data.")
+
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_cond_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.when(df_sim['CIRCOBITO'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.CIRCOBITO.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
+		if df_cond_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+			# persistindo os dados de observation_period no banco.
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [CIRCOBITO] was succesfully updated with SIM data.")
+
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_cond_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.when(df_sim['CIRURGIA'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.CIRURGIA.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
+		if df_cond_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+			# persistindo os dados de observation_period no banco.
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [CIRURGIA] was succesfully updated with SIM data.")
+
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_cond_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.when(df_sim['GESTACAO'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.GESTACAO.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
+		if df_cond_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+			# persistindo os dados de observation_period no banco.
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [GESTACAO] was succesfully updated with SIM data.")
+
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_cond_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.when(df_sim['GRAVIDEZ'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.GRAVIDEZ.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
+		if df_cond_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+			# persistindo os dados de observation_period no banco.
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [GRAVIDEZ] was succesfully updated with SIM data.")
+
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_cond_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.when(df_sim['OBITOGRAV'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.OBITOGRAV.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
+		if df_cond_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+			# persistindo os dados de observation_period no banco.
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [OBITOGRAV] was succesfully updated with SIM data.")
+
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_cond_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.when(df_sim['OBITOPARTO'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.OBITOPARTO.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
+		if df_cond_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+			# persistindo os dados de observation_period no banco.
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [OBITOPARTO] was succesfully updated with SIM data.")
+
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_cond_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.when(df_sim['OBITOPUERP'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.OBITOPUERP.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
+		if df_cond_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+			# persistindo os dados de observation_period no banco.
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [OBITOPUERP] was succesfully updated with SIM data.")
+
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_cond_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.when(df_sim['SEMAGESTAC'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.SEMAGESTAC.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
+		if df_cond_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+			# persistindo os dados de observation_period no banco.
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [SEMAGESTAC] was succesfully updated with SIM data.")
+
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_cond_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.when(df_sim['STCODIFICA'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.STCODIFICA.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
+		if df_cond_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+			# persistindo os dados de observation_period no banco.
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [STCODIFICA] was succesfully updated with SIM data.")
+
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_cond_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.when(df_sim['STDOEPIDEM'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.STDOEPIDEM.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
+		if df_cond_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+			# persistindo os dados de observation_period no banco.
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [STDOEPIDEM] was succesfully updated with SIM data.")
+
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_cond_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.when(df_sim['STDONOVA'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.STDONOVA.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
+		if df_cond_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+			# persistindo os dados de observation_period no banco.
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [STDONOVA] was succesfully updated with SIM data.")
+
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_cond_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.when(df_sim['TIPOBITO'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.TIPOBITO.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
+		if df_cond_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+			# persistindo os dados de observation_period no banco.
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [TIPOBITO] was succesfully updated with SIM data.")
+
+     	# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_cond_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.when(df_sim['TPMORTEOCO'] == '1', 999999).otherwise(999998).alias('condition_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('condition_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('condition_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('condition_status_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('stop_reason'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.TPMORTEOCO.alias('condition_source_value'),
+		FSql.lit(None).cast(LongType()).alias('condition_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('condition_status_source_value') \
+		).rdd, df_cond_occur_schema)
+
+		if df_cond_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_cond_occur_df = spark.sql("SELECT greatest(max(condition_occurrence_id),0) + 1 AS max_cond_occur FROM bios.rebios.condition_occurrence")
+			count_max_cond_occur = count_max_cond_occur_df.first().max_cond_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_cond_occur = df_cond_occur.withColumn("condition_occurrence_id", df_cond_occur["condition_occurrence_id"] + count_max_cond_occur)
+			# persistindo os dados de observation_period no banco.
+			df_cond_occur.writeTo("bios.rebios.condition_occurrence").append()
+			logger.info("Table Condition Occurrence [TPMORTEOCO] was succesfully updated with SIM data.")
+
+		# *************************************************************
+		#  MEASUREMENT - Persistência dos dados 
+		#  A partir de um registro do source serão inseridos vários registros na tabela measurement, por isso, o dataframe é recriado trocando o campo de entrada.
+		#  Source field: PESO
+		# *************************************************************
+		#spark.sql("""insert into measurement (measurement_id,person_id,measurement_concept_id,measurement_date,measurement_type_concept_id,   # usado type_concept  Government Report 32848value_as_number,measurement_source_value)
+		#values (
+		#(df_measurement.identity, df_sinasc.identity, 4264825, makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.peso, df_sinasc.peso)""") # PESO	Peso ao nascer em gramas.
+		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_measurement=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('measurement_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.lit(4264825).cast(LongType()).alias('measurement_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias('measurement_date'), \
+		FSql.lit(32848).cast(LongType()).alias('measurement_type_concept_id'), \
+		FSql.lit(None).cast(FloatType()).alias('value_as_number'), \
+		FSql.lit(None).cast(TimestampType()).alias('measurement_timestamp'), \
+		FSql.lit(None).cast(TimestampType()).alias('measurement_time'), \
+		FSql.lit(None).cast(LongType()).alias('operator_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('value_as_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('unit_concept_id'), \
+		FSql.lit(None).cast(FloatType()).alias('range_low'), \
+		FSql.lit(None).cast(FloatType()).alias('range_high'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.PESO.alias('measurement_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('measurement_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('unit_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('unit_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('value_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('measurement_event_id'), \
+		FSql.lit(None).cast(LongType()).alias('meas_event_field_concept_id') \
+		).rdd, df_measurement_schema)
+
+		if df_measurement.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_measurement_df = spark.sql("SELECT greatest(max(measurement_id),0) + 1 AS max_measurement FROM bios.rebios.measurement")
+			count_max_measurement = count_max_measurement_df.first().max_measurement
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_measurement = df_measurement.withColumn("measurement_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_measurement = df_measurement.withColumn("measurement_id", df_measurement["measurement_id"] + count_max_measurement)
+			# persistindo os dados de observation_period no banco.
+			df_measurement.writeTo("bios.rebios.measurement").append()
+			logger.info("Table Measurement Occurrence [PESO] was succesfully updated with SIM data.")
+
+
+		# *************************************************************
+		#  OBSERVATION_PERIOD - Persistência dos dados 
+		# *************************************************************
+
+		# |-- observation_period_id: long (nullable = false)
+		# |-- person_id: long (nullable = false)
+		# |-- observation_period_start_date: date (nullable = false)
+		# |-- observation_period_end_date: timestamp (nullable = false)
+		# |-- period_type_concept_id: long (nullable = false)
+
+		# Definindo o novo esquema para suportar valores nulos e não-nulos.
+		df_obs_period_schema = StructType([ \
+			StructField("observation_period_id", LongType(), False), \
+			StructField("person_id", LongType(), False), \
+			StructField("observation_period_start_date", TimestampType(), False), \
+			StructField("observation_period_end_date", TimestampType(), False), \
+			StructField("period_type_concept_id", LongType(), False) \
+		])
+
+		#FSql.to_timestamp(concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias("observation_period_start_date"), \
+		#FSql.to_timestamp(concat(FSql.lpad(df_sinasc.DTNASC,8,'0'), FSql.lit(' '), FSql.lpad(df_sinasc.HORANASC,4,'0')), 'ddMMyyyy kkmm').alias('observation_period_end_date'), \
+
+		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		logger.info("Processing Observation Period data...")
+		df_obs_period=spark.createDataFrame(df_sim.select(\
+		FSql.lit(0).cast(LongType()).alias('observation_period_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.to_timestamp(FSql.to_timestamp(FSql.coalesce(FSql.concat(FSql.lpad(FSql.col("DTATESTADO"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.lit('0000'), 4, '0')), FSql.lit('01011991 0000')), 'ddMMyyyy HHmm')).alias("observation_period_start_date"),\
+		FSql.to_timestamp(FSql.to_timestamp(FSql.coalesce(FSql.concat(FSql.lpad(FSql.col("DTATESTADO"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.lit('0000'), 4, '0')), FSql.lit('01011991 0000')), 'ddMMyyyy HHmm')).alias("observation_period_end_date"),\
+		FSql.lit(4193440).alias('period_type_concept_id')).rdd, \
+		df_obs_period_schema)
+
+		#df_null = df_obs_period.filter(df_obs_period["observation_period_start_date"].isNull() == True)
+		#df_null.show(n=999999, truncate=False)
+
+		if df_obs_period.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_obs_period_df = spark.sql("SELECT greatest(max(observation_period_id),0) + 1 AS max_obs_period FROM bios.rebios.observation_period")
+			count_max_obs_period = count_max_obs_period_df.first().max_obs_period
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_obs_period = df_obs_period.withColumn("observation_period_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_obs_period = df_obs_period.withColumn("observation_period_id", df_obs_period["observation_period_id"] + count_max_obs_period)
+			# persistindo os dados de observation_period no banco.
+			df_obs_period.writeTo("bios.rebios.observation_period").append()
+			logger.info("Table Obervation Period with [DTATESTADO] was succesfully updated with SIM data.")
+
+		logger.info("Processing Observation Period data...")
+		df_obs_period=spark.createDataFrame(df_sim.select(\
+		FSql.lit(0).cast(LongType()).alias('observation_period_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.to_timestamp(FSql.to_timestamp(FSql.coalesce(FSql.concat(FSql.lpad(FSql.col("DTCADASTRO"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.lit('0000'), 4, '0')), FSql.lit('01011991 0000')), 'ddMMyyyy HHmm')).alias("observation_period_start_date"),\
+		FSql.to_timestamp(FSql.to_timestamp(FSql.coalesce(FSql.concat(FSql.lpad(FSql.col("DTCADASTRO"), 8, '0'), FSql.lit(' '), FSql.lpad(FSql.lit('0000'), 4, '0')), FSql.lit('01011991 0000')), 'ddMMyyyy HHmm')).alias("observation_period_end_date"),\
+		FSql.lit(4193440).alias('period_type_concept_id')).rdd, \
+		df_obs_period_schema)
+
+		#df_null = df_obs_period.filter(df_obs_period["observation_period_start_date"].isNull() == True)
+		#df_null.show(n=999999, truncate=False)
+
+		if df_obs_period.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_obs_period_df = spark.sql("SELECT greatest(max(observation_period_id),0) + 1 AS max_obs_period FROM bios.rebios.observation_period")
+			count_max_obs_period = count_max_obs_period_df.first().max_obs_period
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_obs_period = df_obs_period.withColumn("observation_period_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_obs_period = df_obs_period.withColumn("observation_period_id", df_obs_period["observation_period_id"] + count_max_obs_period)
+			# persistindo os dados de observation_period no banco.
+			df_obs_period.writeTo("bios.rebios.observation_period").append()
+			logger.info("Table Obervation Period with [DTCADASTRO] was succesfully updated with SIM data.")
+
+
+		# *************************************************************
+		#  PROCEDURE_OCCURRENCE - Persistência dos dados 
+		#  A partir de um registro do source serão inseridos vários registros na tabela procedure_occurrence, por isso, o dataframe é recriado trocando o campo de entrada.
+		# *************************************************************
+		# Definindo o novo esquema para suportar valores nulos e não-nulos.
+		df_proc_occur_schema = StructType([ \
+		StructField("procedure_occurrence_id", LongType(), False), \
+		StructField("person_id", LongType(), False), \
+		StructField("procedure_concept_id", LongType(), False), \
+		StructField("procedure_date", DateType(), False), \
+		StructField("procedure_timestamp", TimestampType(), True), \
+		StructField("procedure_end_date", DateType(), True), \
+		StructField("procedure_end_timestamp", TimestampType(), True), \
+		StructField("procedure_type_concept_id", LongType(), False), \
+		StructField("modifier_concept_id", LongType(), True), \
+		StructField("quantity", IntegerType(), True), \
+		StructField("provider_id", LongType(), True), \
+		StructField("visit_occurrence_id",  LongType(), True), \
+		StructField("visit_detail_id",  LongType(), True), \
+		StructField("procedure_source_value", StringType(), True), \
+		StructField("procedure_source_concept_id", LongType(), True), \
+		StructField("modifier_source_value",  StringType(), True) \
+		])
+
+		# *************************************************************
+		#  PROCEDURE_OCCURRENCE - Persistência dos dados 
+		#  A partir de um registro do source serão inseridos vários registros na tabela procedure_occurrence, por isso, o dataframe é recriado trocando o campo de entrada.
+		#  Source field: EXAME
+		# *************************************************************
+		#spark.sql("""insert into procedure_occurrence(procedure_occurrence_id,person_id,procedure_concept_id,procedure_date,procedure_type_concept_id,procedure_source_value)
+		#values (
+		#(df_procedure_occurrence.identity, df_sinasc.identity, case when df_sinasc.parto = 1 then 999999 when df_sinasc.parto = 2 then 4015701 else 9999999), makedate(substr(df_sinasc.dtnasc, 5), substr(df_sinasc.dtnasc, 3, 2), substr(df_sinasc.dtnasc, 1, 2)), 32848, df_sinasc.parto)""") # PARTO	Tipo de parto: 1– Vaginal; 2– Cesário; 9– Ignorado
+		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
+		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+		df_proc_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.lit(999992).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.EXAME.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
+
+		if df_proc_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
+			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+			# persistindo os dados de observation_period no banco.
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [EXAME] was succesfully updated with SIM data.")
+
+
+		df_proc_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.lit(999992).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.LINHAA.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
+
+		if df_proc_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
+			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+			# persistindo os dados de observation_period no banco.
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [LINHAA] was succesfully updated with SIM data.")
+
+		df_proc_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.lit(999992).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.LINHAB.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
+
+		if df_proc_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
+			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+			# persistindo os dados de observation_period no banco.
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [LINHAB] was succesfully updated with SIM data.")
+
+		df_proc_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.lit(999992).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.LINHAC.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
+
+		if df_proc_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
+			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+			# persistindo os dados de observation_period no banco.
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [LINHAC] was succesfully updated with SIM data.")
+
+		df_proc_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.lit(999992).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.LINHAD.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
+
+		if df_proc_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
+			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+			# persistindo os dados de observation_period no banco.
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [LINHAD] was succesfully updated with SIM data.")
+
+		df_proc_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.lit(999992).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.LINHII.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
+
+		if df_proc_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
+			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+			# persistindo os dados de observation_period no banco.
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [LINHII] was succesfully updated with SIM data.")
+
+
+		df_proc_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.lit(999992).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.CAUSABAS_O.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
+
+		if df_proc_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
+			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+			# persistindo os dados de observation_period no banco.
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [CAUSABAS_O] was succesfully updated with SIM data.")
+
+		df_proc_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.lit(999992).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.CAUSAMAT.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
+
+		if df_proc_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
+			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+			# persistindo os dados de observation_period no banco.
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [CAUSAMAT] was succesfully updated with SIM data.")
+
+		df_proc_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.lit(999992).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.CD_PRE.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
+
+		if df_proc_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
+			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+			# persistindo os dados de observation_period no banco.
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [CD_PRE] was succesfully updated with SIM data.")
+
+
+		df_proc_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.lit(999992).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.NECROPSIA.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
+
+		if df_proc_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
+			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+			# persistindo os dados de observation_period no banco.
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [NECROPSIA] was succesfully updated with SIM data.")
+
+		df_proc_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.lit(999992).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.NUDIASOBIN.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
+
+		if df_proc_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
+			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+			# persistindo os dados de observation_period no banco.
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [NUDIASOBIN] was succesfully updated with SIM data.")
+
+		df_proc_occur=spark.createDataFrame(df_sim.select( \
+		FSql.lit(0).cast(LongType()).alias('procedure_occurrence_id'), \
+		df_sim.person_id.alias('person_id'), \
+		FSql.lit(999992).cast(LongType()).alias('procedure_concept_id'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_timestamp'), \
+		FSql.to_date(FSql.lpad(df_sim.DTOBITO,8,'0'), 'DDmmyyyy').alias("procedure_end_date"), \
+		FSql.lit(None).cast(TimestampType()).alias('procedure_end_timestamp'), \
+		FSql.lit(32848).cast(LongType()).alias('procedure_type_concept_id'), \
+		FSql.lit(None).cast(LongType()).alias('modifier_concept_id'), \
+		FSql.lit(None).cast(IntegerType()).alias('quantity'), \
+		FSql.lit(None).cast(LongType()).alias('provider_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_occurrence_id'), \
+		FSql.lit(None).cast(LongType()).alias('visit_detail_id'), \
+		df_sim.PARTO.alias('procedure_source_value'), \
+		FSql.lit(None).cast(LongType()).alias('procedure_source_concept_id'), \
+		FSql.lit(None).cast(StringType()).alias('modifier_source_value') \
+		).rdd, df_proc_occur_schema)
+
+		if df_proc_occur.count() > 0:
+			#obtem o max da tabela para usar na inserção de novos registros
+			count_max_proc_occur_df = spark.sql("SELECT greatest(max(procedure_occurrence_id),0) + 1 AS max_proc_occur FROM bios.rebios.procedure_occurrence")
+			count_max_proc_occur = count_max_proc_occur_df.first().max_proc_occur
+			#geração dos id's únicos nos dados de entrada. O valor inicial é 1.
+			# a ordenação a seguir é necessária para a função row_number(). Existe a opção de usar a função monotonically_increasing_id, mas essa conflita com o uso 
+			# do select max(person_id) já que os id's gerados por ela são números compostos pelo id da partição e da linha na tabela. 
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", monotonically_increasing_id())
+			#sincroniza os id's gerados com o max(person_id) existente no banco de dados
+			df_proc_occur = df_proc_occur.withColumn("procedure_occurrence_id", df_proc_occur["procedure_occurrence_id"] + count_max_proc_occur)
+			# persistindo os dados de observation_period no banco.
+			df_proc_occur.writeTo("bios.rebios.procedure_occurrence").append()
+			logger.info("Table Procedure Occurrence [PARTO] was succesfully updated with SIM data.")
+
+
+		logger.info("ETL using SIM data finished with success. Please, check the log file.")
+		# return success
+		sys.exit(0)
+	except Exception as e:
+		logger.error(f"Fatal error while loading data from SIM: {str(e)}")
 		#return failure
 		sys.exit(-1)
