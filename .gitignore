@@ -21,6 +21,7 @@ i# information for Eclipse / Flash Builder.
 #.env
 spark/docker/.env
 airflow/docker/.env
+airflow/.env
 superset/docker/.env
 
 airflow/log/
