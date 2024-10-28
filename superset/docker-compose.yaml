@@ -13,12 +13,21 @@ services:
         restart: unless-stopped
         volumes:
             - redis:/data
+        deploy:
+            resources:
+               limits:
+                  cpus: '4'
+                  memory: 8G
+               reservations:
+                  cpus: '2'
+                  memory: 4G
         extra_hosts:
             - host.docker.internal:host-gateway
 
     superset:
-        build:
-            <<: *common-build
+      #build:
+      #  <<: *common-build
+        image: superset-rebios:latest
         depends_on:
             - redis
         env_file:
@@ -32,7 +41,14 @@ services:
         volumes: *superset-volumes
         extra_hosts:
             - host.docker.internal:host-gateway
-
+        deploy:
+            resources:
+               limits:
+                  cpus: '3'
+                  memory: 4G
+               reservations:
+                  cpus: '2'
+                  memory: 3G
     superset-init:
         container_name: superset_init
         build:
@@ -66,7 +82,15 @@ services:
             [
               "CMD-SHELL",
               "celery -A superset.tasks.celery_app:app inspect ping -d celery@$$HOSTNAME",
-            ]
+            ] 
+        deploy:
+            resources:
+               limits:
+                  cpus: '2'
+                  memory: 4G
+               reservations:
+                  cpus: '1'
+                  memory: 2G
         extra_hosts:
           - host.docker.internal:host-gateway
 
@@ -84,6 +108,14 @@ services:
         volumes: *superset-volumes
         healthcheck:
           disable: true
+        deploy:
+            resources:
+               limits:
+                  cpus: '2'
+                  memory: 4G
+               reservations:
+                  cpus: '1'
+                  memory: 2G
         extra_hosts:
           - host.docker.internal:host-gateway
 

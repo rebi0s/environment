@@ -12,5 +12,13 @@ services:
         volumes:
             - ./config/hue.ini:/usr/share/hue/desktop/conf/hue.ini
             - ./config/log.conf:/etc/hue/conf/log.conf
+        deploy:
+            resources:
+               limits:
+                  cpus: '2'
+                  memory: 4G
+               reservations:
+                  cpus: '1'
+                  memory: 2G              
         extra_hosts:
             - host.docker.internal:host-gateway

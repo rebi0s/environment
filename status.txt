@@ -1,0 +1,15 @@
+-e 
+spark_worker_b -- -- / --
+spark_worker_a -- -- / --
+spark_master -- -- / --
+superset_init 0.00% 0B / 0B
+superset_app 0.03% 417.2MiB / 31.34GiB
+superset_worker_beat 0.00% 175.7MiB / 31.34GiB
+superset_worker 0.22% 222.2MiB / 31.34GiB
+superset_cache 0.32% 3.438MiB / 31.34GiB
+hue_server 0.05% 249.4MiB / 31.34GiB
+rebios-pgadmin 0.02% 178.7MiB / 31.34GiB
+iceberg_postgres_db 0.00% 134.1MiB / 31.34GiB
+spark_master 0.14% 369.2MiB / 16GiB
+spark_worker_a 0.10% 324.9MiB / 8GiB
+spark_worker_b 0.12% 305.3MiB / 8GiB

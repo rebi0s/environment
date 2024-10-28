@@ -23,21 +23,15 @@ start-thriftserver.sh --packages $DEPENDENCIES \
     --conf iceberg.engine.hive.enabled=true \
     --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
     --conf spark.sql.catalog.bios=org.apache.iceberg.spark.SparkCatalog \
-    --conf spark.sql.catalog.bios.warehouse=s3a://${S3_BUCKET}/ \
+    --conf spark.sql.catalog.bios.warehouse=s3a://${S3_BUCKET}/rebios \
     --conf spark.sql.catalog.bios.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
     --conf spark.sql.catalog.bios.s3.endpoint=${S3_ENDPOINT} \
     --conf spark.sql.catalog.bios.catalog-impl=org.apache.iceberg.jdbc.JdbcCatalog \
     --conf spark.sql.catalog.bios.uri=jdbc:postgresql://host.docker.internal:5420/db_iceberg \
     --conf spark.sql.catalog.bios.jdbc.user=icbergcat \
     --conf spark.sql.catalog.bios.jdbc.password=hNXz35UBRcAC \
-    --conf spark.sql.catalog.rebios=org.apache.iceberg.spark.SparkCatalog \
-    --conf spark.sql.catalog.rebios.warehouse=s3a://${S3_BUCKET}/rebios \
-    --conf spark.sql.catalog.rebios.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
-    --conf spark.sql.catalog.rebios.s3.endpoint=${S3_ENDPOINT} \
-    --conf spark.sql.catalog.rebios.catalog-impl=org.apache.iceberg.jdbc.JdbcCatalog \
-    --conf spark.sql.catalog.rebios.uri=jdbc:postgresql://host.docker.internal:5420/db_iceberg \
-    --conf spark.sql.catalog.rebios.jdbc.user=icbergcat \
-    --conf spark.sql.catalog.rebios.jdbc.password=hNXz35UBRcAC
+    --conf spark.executor.memory=6g \
+    --conf spark.driver.memory=4g
 
 #docker exec -it spark_master /bin/bash
 #beeline

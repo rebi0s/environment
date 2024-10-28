@@ -23,6 +23,14 @@ services:
             - host.docker.internal:host-gateway
         env_file:
           - docker/.env
+        deploy:
+            resources:
+               limits:
+                  cpus: '6'
+                  memory: 16G
+               reservations:
+                  cpus: '2'
+                  memory: 4G  
 
     spark-worker-a:
         container_name: spark_worker_a
@@ -36,13 +44,21 @@ services:
             - spark-master
         environment:
             - SPARK_MASTER=spark://spark-master:7077
-            - SPARK_WORKER_CORES=1
-            - SPARK_WORKER_MEMORY=1G
-            - SPARK_DRIVER_MEMORY=1G
-            - SPARK_EXECUTOR_MEMORY=1G
+            - SPARK_WORKER_CORES=2
+            - SPARK_WORKER_MEMORY=4G
+            - SPARK_DRIVER_MEMORY=4G
+            - SPARK_EXECUTOR_MEMORY=4G
             - SPARK_WORKLOAD=worker
             - SPARK_LOCAL_IP=spark-worker-a
         restart: always
+        deploy:
+            resources:
+               limits:
+                  cpus: '2'
+                  memory: 4G
+               reservations:
+                  cpus: '1'
+                  memory: 2G
         extra_hosts:
             - host.docker.internal:host-gateway
         volumes:
@@ -64,15 +80,23 @@ services:
             - spark-master
         environment:
             - SPARK_MASTER=spark://spark-master:7077
-            - SPARK_WORKER_CORES=1
-            - SPARK_WORKER_MEMORY=1G
-            - SPARK_DRIVER_MEMORY=1G
-            - SPARK_EXECUTOR_MEMORY=1G
+            - SPARK_WORKER_CORES=2
+            - SPARK_WORKER_MEMORY=4G
+            - SPARK_DRIVER_MEMORY=4G
+            - SPARK_EXECUTOR_MEMORY=4G
             - SPARK_WORKLOAD=worker
             - SPARK_LOCAL_IP=spark-worker-b
         restart: always
         extra_hosts:
             - host.docker.internal:host-gateway
+        deploy:
+            resources:
+               limits:
+                  cpus: '2'
+                  memory: 4G
+               reservations:
+                  cpus: '1'
+                  memory: 2G
         volumes:
             - ../../spark/spark-worker-b/apps:/opt/spark-apps
             - ../../spark/spark-worker-b/data:/opt/spark-data

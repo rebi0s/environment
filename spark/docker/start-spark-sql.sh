@@ -27,23 +27,16 @@ spark-sql --packages $DEPENDENCIES \
     --conf spark.sql.catalog.bios.uri=jdbc:postgresql://host.docker.internal:5420/db_iceberg \
     --conf spark.sql.catalog.bios.jdbc.user=icbergcat \
     --conf spark.sql.catalog.bios.jdbc.password=hNXz35UBRcAC \
-    --conf spark.sql.catalog.bios.warehouse=s3a://${S3_BUCKET}/ \
+    --conf spark.sql.catalog.bios.warehouse=s3a://${S3_BUCKET}/rebios \
     --conf spark.sql.catalog.bios.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
     --conf spark.sql.catalog.bios.s3.endpoint=${S3_ENDPOINT} \
-    --conf spark.sql.catalog.rebios=org.apache.iceberg.spark.SparkCatalog \
-    --conf spark.sql.catalog.rebios.catalog-impl=org.apache.iceberg.jdbc.JdbcCatalog \
-    --conf spark.sql.catalog.rebios.uri=jdbc:postgresql://host.docker.internal:5420/db_iceberg \
-    --conf spark.sql.catalog.rebios.jdbc.user=icbergcat \
-    --conf spark.sql.catalog.rebios.jdbc.password=hNXz35UBRcAC \
-    --conf spark.sql.catalog.rebios.warehouse=s3a://${S3_BUCKET}/rebios \
-    --conf spark.sql.catalog.rebios.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
-    --conf spark.sql.catalog.rebios.s3.endpoint=${S3_ENDPOINT} \
     --conf spark.sql.catalog.spark_catalog=org.apache.iceberg.spark.SparkSessionCatalog \
     --conf spark.eventLog.enabled=true \
     --conf spark.eventLog.dir=/workspace/spark-events \
     --conf spark.history.fs.logDirectory= /workspace/spark-events \
     --conf spark.sql.catalogImplementation=in-memory \
-    --conf spark.executor.memory=6g
+    --conf spark.executor.memory=6g \
+    --conf spark.driver.memory=4g
 
 #   CREATE TABLE bios.table_01 (
 #          id bigint,
