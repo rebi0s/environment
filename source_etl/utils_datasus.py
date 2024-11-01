@@ -80,6 +80,15 @@ def loadIdc10(spark: SparkSession, logger: logging.Logger):
     cid10_cols = ["codigo_cid10", "conceptid"]
     df_cid10 = spark.createDataFrame(data=cid10, schema = cid10_cols)
 
+
+Atualmente, o Brasil é dividido em cinco regiões:
+
+    Região Norte: Amazonas, Pará, Roraima, Amapá, Rondônia, Acre e Tocantins.
+    Região Nordeste: Piauí, Maranhão, Pernambuco, Rio Grande do Norte, Paraíba, Ceará, Bahia, Alagoas e Sergipe.
+    Região Centro-Oeste: Mato Grosso, Mato Grosso do Sul e Goiás.
+    Região Sudeste: São Paulo, Rio de Janeiro, Espírito Santo e Minas Gerais.
+    Região Sul: Rio Grande do Sul, Paraná e Santa Catarina.
+
 def loadStates(spark: SparkSession, logger: logging.Logger):
     #load dos estados
     estados = [
@@ -111,7 +120,7 @@ def loadStates(spark: SparkSession, logger: logging.Logger):
     ('Sergipe',28,'SE'),
     ('Tocantins',17,'TO'),
     ]
-    estados_cols = ["nome_uf","codigo_uf","uf"]
+    estados_cols = ["nome_uf","codigo_uf","uf","codigo_regiao","nome_regiao"]
     df_estados = spark.createDataFrame(data=estados, schema = estados_cols)
     return df_estados
 
