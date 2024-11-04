@@ -81,44 +81,44 @@ def loadIdc10(spark: SparkSession, logger: logging.Logger):
     df_cid10 = spark.createDataFrame(data=cid10, schema = cid10_cols)
 
 
-Atualmente, o Brasil é dividido em cinco regiões:
-
-    Região Norte: Amazonas, Pará, Roraima, Amapá, Rondônia, Acre e Tocantins.
-    Região Nordeste: Piauí, Maranhão, Pernambuco, Rio Grande do Norte, Paraíba, Ceará, Bahia, Alagoas e Sergipe.
-    Região Centro-Oeste: Mato Grosso, Mato Grosso do Sul e Goiás.
-    Região Sudeste: São Paulo, Rio de Janeiro, Espírito Santo e Minas Gerais.
-    Região Sul: Rio Grande do Sul, Paraná e Santa Catarina.
-
+#Atualmente, o Brasil é dividido em cinco regiões:
+#
+#    Região Norte: Amazonas, Pará, Roraima, Amapá, Rondônia, Acre e Tocantins.
+#    Região Nordeste: Piauí, Maranhão, Pernambuco, Rio Grande do Norte, Paraíba, Ceará, Bahia, Alagoas e Sergipe.
+#    Região Centro-Oeste: Mato Grosso, Mato Grosso do Sul e Goiás.
+#    Região Sudeste: São Paulo, Rio de Janeiro, Espírito Santo e Minas Gerais.
+#    Região Sul: Rio Grande do Sul, Paraná e Santa Catarina.
+#
 def loadStates(spark: SparkSession, logger: logging.Logger):
     #load dos estados
     estados = [
-    ('Acre',12,'AC'),
-    ('Alagoas',27,'AL'),
-    ('Amapá',16,'AP'),
-    ('Amazonas',13,'AM'),
-    ('Bahia',29,'BA'),
-    ('Ceará',23,'CE'),
+    ('Acre',12,'AC',1,'Norte'),
+    ('Alagoas',27,'AL',2,'Nordeste'),
+    ('Amapá',16,'AP',1,'Norte'),
+    ('Amazonas',13,'AM',1,'Norte'),
+    ('Bahia',29,'BA',2,'Nordeste'),
+    ('Ceará',23,'CE',2,'Nordeste'),
     ('Distrito Federal',53,'DF'),
-    ('Espírito Santo',32,'ES'),
-    ('Goiás',52,'GO'),
-    ('Maranhão',21,'MA'),
-    ('Mato Grosso',51,'MT'),
-    ('Mato Grosso do Sul',50,'MS'),
-    ('Minas Gerais',31,'MG'),
-    ('Pará',15,'PA'),
-    ('Paraíba',25,'PB'),
-    ('Paraná',41,'PR'),
-    ('Pernambuco',26,'PE'),
-    ('Piauí',22,'PI'),
-    ('Rio Grande do Norte',24,'RN'),
-    ('Rio Grande do Sul',43,'RS'),
-    ('Rio de Janeiro',33,'RJ'),
-    ('Rondônia',11,'RO'),
-    ('Roraima',14,'RR'),
-    ('Santa Catarina',42,'SC'),
-    ('São Paulo',35,'SP'),
-    ('Sergipe',28,'SE'),
-    ('Tocantins',17,'TO'),
+    ('Espírito Santo',32,'ES',3,'Sudeste'),
+    ('Goiás',52,'GO',5,'Centro-Oeste'),
+    ('Maranhão',21,'MA',2,'Nordeste'),
+    ('Mato Grosso',51,'MT',5,'Centro-Oeste'),
+    ('Mato Grosso do Sul',50,'MS',5,'Centro-Oeste'),
+    ('Minas Gerais',31,'MG',3,'Sudeste'),
+    ('Pará',15,'PA',1,'Norte'),
+    ('Paraíba',25,'PB',2,'Nordeste'),
+    ('Paraná',41,'PR',4,'Sul'),
+    ('Pernambuco',26,'PE',2,'Nordeste'),
+    ('Piauí',22,'PI',2,'Nordeste'),
+    ('Rio Grande do Norte',24,'RN',2,'Nordeste'),
+    ('Rio Grande do Sul',43,'RS',4,'Sul'),
+    ('Rio de Janeiro',33,'RJ',3,'Sudeste'),
+    ('Rondônia',11,'RO',1,'Norte'),
+    ('Roraima',14,'RR',1,'Norte'),
+    ('Santa Catarina',42,'SC',4,'Sul'),
+    ('São Paulo',35,'SP',3,'Sudeste'),
+    ('Sergipe',28,'SE',2,'Nordeste'),
+    ('Tocantins',17,'TO',1,'Norte'),
     ]
     estados_cols = ["nome_uf","codigo_uf","uf","codigo_regiao","nome_regiao"]
     df_estados = spark.createDataFrame(data=estados, schema = estados_cols)
