@@ -569,7 +569,7 @@ if sys.argv[1] == 'SINASC':
 		df_cond_occur=spark.createDataFrame(df_sinasc.select( \
 		FSql.lit(0).cast(LongType()).alias('condition_occurrence_id'), \
 		df_sinasc.person_id.alias('person_id'), \
-		FSQl.lit(432250).alias('condition_concept_id'), \
+		FSql.lit(432250).alias('condition_concept_id'), \
 		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_start_date"), \
 		FSql.lit(None).cast(TimestampType()).alias('condition_start_timestamp'), \
 		FSql.to_date(FSql.lpad(df_sinasc.DTNASC,8,'0'), 'DDmmyyyy').alias("condition_end_date"), \
@@ -1870,12 +1870,18 @@ if sys.argv[1] == 'CLIMATE':
 		if num_args != 4:
 			logger.error("Check the command line usage. For CLIMATE the options are as below.")
 			logger.error("Usage: ")
-			logger.error("   spark-submit loading.py CLIMATE /path_to_folder_with_climate_data file_name_with_climate_data")
+			logger.error("   spark-submit loading.py CLIMATE /path_to_folder_with_climate_data/ file_name_with_climate_data")
 			sys.exit(-1)
 
 		logger.info("Loading external data from CLIMATE to Climaterna database.")
 
 		df_climate = spark.read.parquet(os.path.join(sys.argv[2], sys.argv[3]))
+
+		logger.info("Loading file: %s ", os.path.join(sys.argv[2], sys.argv[3]))
+
+		df_states = loadStates(spark, logger)
+		#df_load = df_load.withColumn("COD_UF", FSql.substring("geocodigo", 1, 2))
+		df_climate = (df_climate.join(df_states, [df_climate.code_state == df_states.codigo_uf], 'inner'))
 
 		df_climate_schema = StructType([ \
 		StructField("city_code", StringType(), True), \
@@ -1920,7 +1926,18 @@ if sys.argv[1] == 'CLIMATE':
 		StructField("Evapotranspiration_min_value", FloatType(), True), \
 		StructField("Evapotranspiration_max_value", FloatType(), True), \
 		StructField("Evapotranspiration_stdev_value", FloatType(), True), \
-		StructField("Evapotranspiration_sum", FloatType(), True) \
+		StructField("Evapotranspiration_sum", FloatType(), True), \
+		StructField("ethane_c2h6", FloatType(), True), \
+		StructField("acetone_ch3coch3", FloatType(), True), \
+		StructField("methane_ch4", FloatType(), True), \
+		StructField("carbon_monoxide_co", FloatType(), True), \
+		StructField("carbon_dioxide_co2s", FloatType(), True), \
+		StructField("hydrogen_chloride_hcl", FloatType(), True), \
+		StructField("max_to_min_concentration_rate_mmrpm10", FloatType(), True), \
+		StructField("max_to_min_concentration_rate_mmrpm2p5", FloatType(), True), \
+		StructField("nitrogen_dioxide_no2", FloatType(), True), \
+		StructField("maximum_tropospheric_ozone_sfo3max", FloatType(), True), \
+		StructField("sulfur_dioxide_so2", FloatType(), True) \
 		])
 
 		# *************************************************************
@@ -1937,7 +1954,7 @@ if sys.argv[1] == 'CLIMATE':
 			df_climate.code_state.alias('state_code'), \
 			df_climate.abbrev_state.alias('state_abbreviation'), \
 			df_climate.name_state.alias('state_name'), \
-			df_climate.code_region.alias('region_code'), \
+			df_climate.code_region.cast(FloatType()).alias('region_code'), \
 			df_climate.name_region.alias('region_name'), \
 			df_climate.date.alias('measurement_date'), \
 			df_climate.TMIN_mean.alias('temperature_min_mean_value'), \
@@ -1974,7 +1991,18 @@ if sys.argv[1] == 'CLIMATE':
 			df_climate.u2_min.alias('Evapotranspiration_min_value'), \
 			df_climate.u2_max.alias('Evapotranspiration_max_value'), \
 			df_climate.u2_stdev.alias('Evapotranspiration_stdev_value'), \
-			FSql.lit(None).alias('Evapotranspiration_sum')
+			FSql.lit(None).alias('Evapotranspiration_sum'), \
+			df_climate.c2h6.alias('ethane_c2h6'), \
+			df_climate.ch3coch3.alias('acetone_ch3coch3'), \
+			df_climate.ch4.alias('methane_ch4'), \
+			df_climate.co2s.alias('carbon_monoxide_co'), \
+			df_climate.co.alias('carbon_dioxide_co2s'), \
+			df_climate.hcl.alias('hydrogen_chloride_hcl'), \
+			df_climate.mmrpm10.alias('max_to_min_concentration_rate_mmrpm10'), \
+			df_climate.mmrpm2p5.alias('max_to_min_concentration_rate_mmrpm2p5'), \
+			df_climate.no2.alias('nitrogen_dioxide_no2'), \
+			df_climate.sfo3max.alias('maximum_tropospheric_ozone_sfo3max'), \
+			df_climate.so2.alias('sulfur_dioxide_so2') \
 			).rdd, df_climate_schema)
 		else:
 			df_climate_iceberg=spark.createDataFrame(df_climate.select( \
@@ -1982,9 +2010,9 @@ if sys.argv[1] == 'CLIMATE':
 			df_climate.name_muni.alias('city_name'), \
 			df_climate.code_state.alias('state_code'), \
 			df_climate.abbrev_state.alias('state_abbreviation'), \
-			FSql.lit(None).alias('state_name'), \
-			FSql.lit(None).alias('region_code'), \
-			FSql.lit(None).alias('region_name'), \
+			df_climate.nome_uf.alias('state_name'), \
+			df_climate.codigo_regiao.cast(FloatType()).alias('region_code'), \
+			df_climate.nome_regiao.alias('region_name'), \
 			df_climate.date.alias('measurement_date'), \
 			df_climate.TMIN_mean.alias('temperature_min_mean_value'), \
 			df_climate.TMIN_min.alias('temperature_min_min_value'), \
@@ -2020,7 +2048,18 @@ if sys.argv[1] == 'CLIMATE':
 			df_climate.u2_min.alias('Evapotranspiration_min_value'), \
 			df_climate.u2_max.alias('Evapotranspiration_max_value'), \
 			df_climate.u2_stdev.alias('Evapotranspiration_stdev_value'), \
-			FSql.lit(None).alias('Evapotranspiration_sum')
+			FSql.lit(None).alias('Evapotranspiration_sum'), \
+			df_climate.c2h6.alias('ethane_c2h6'), \
+			df_climate.ch3coch3.alias('acetone_ch3coch3'), \
+			df_climate.ch4.alias('methane_ch4'), \
+			df_climate.co2s.alias('carbon_monoxide_co'), \
+			df_climate.co.alias('carbon_dioxide_co2s'), \
+			df_climate.hcl.alias('hydrogen_chloride_hcl'), \
+			df_climate.mmrpm10.alias('max_to_min_concentration_rate_mmrpm10'), \
+			df_climate.mmrpm2p5.alias('max_to_min_concentration_rate_mmrpm2p5'), \
+			df_climate.no2.alias('nitrogen_dioxide_no2'), \
+			df_climate.sfo3max.alias('maximum_tropospheric_ozone_sfo3max'), \
+			df_climate.so2.alias('sulfur_dioxide_so2') \
 			).rdd, df_climate_schema)
 			
 

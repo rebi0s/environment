@@ -85,11 +85,14 @@ def loadIdc10(spark: SparkSession, logger: logging.Logger):
 #
 #    Região Norte: Amazonas, Pará, Roraima, Amapá, Rondônia, Acre e Tocantins.
 #    Região Nordeste: Piauí, Maranhão, Pernambuco, Rio Grande do Norte, Paraíba, Ceará, Bahia, Alagoas e Sergipe.
-#    Região Centro-Oeste: Mato Grosso, Mato Grosso do Sul e Goiás.
+#    Região Centro-Oeste: Mato Grosso, Mato Grosso do Sul, Goiás e DF.
 #    Região Sudeste: São Paulo, Rio de Janeiro, Espírito Santo e Minas Gerais.
 #    Região Sul: Rio Grande do Sul, Paraná e Santa Catarina.
 #
 def loadStates(spark: SparkSession, logger: logging.Logger):
+
+    logger.info("Loading list of States.")
+
     #load dos estados
     estados = [
     ('Acre',12,'AC',1,'Norte'),
@@ -98,7 +101,7 @@ def loadStates(spark: SparkSession, logger: logging.Logger):
     ('Amazonas',13,'AM',1,'Norte'),
     ('Bahia',29,'BA',2,'Nordeste'),
     ('Ceará',23,'CE',2,'Nordeste'),
-    ('Distrito Federal',53,'DF'),
+    ('Distrito Federal',53,'DF',5,'Centro-Oeste'),
     ('Espírito Santo',32,'ES',3,'Sudeste'),
     ('Goiás',52,'GO',5,'Centro-Oeste'),
     ('Maranhão',21,'MA',2,'Nordeste'),
