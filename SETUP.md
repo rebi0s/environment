@@ -88,7 +88,7 @@ cd provisioning
 ansible-playbook ubuntu.minio.ansible.yaml
 ```
 
-MinIO interface can be accessed in [http://<server-ip>:8080](http://<server-ip>:8080)
+MinIO interface can be accessed in [http://server-location:8080](http://server-location>:8080)
 
 ### S3 Instead
 
