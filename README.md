@@ -1,6 +1,8 @@
 # reBI0S Environment 
 
 This repository contains all the Infrastructure as Code (IaC) scripts responsible for deploying, initializing, and configuring the repository.
+Installation instructions are detailed in: [SETUP.md](https://github.com/rebi0s/environment/blob/main/SETUP.md)
+
 
 # reBI0S Architecture
 
