@@ -33,6 +33,12 @@ def initSpark():
         .set("spark.sql.catalog.bios.database", "rebios") # Nome do banco de dados
         .set("spark.sql.legacy.timeParserPolicy","LEGACY") # [INCONSISTENT_BEHAVIOR_CROSS_VERSION.PARSE_DATETIME_BY_NEW_PARSER] You may get a different result due to the upgrading to Spark >= 3.0:
     )
+    #/opt/spark/conf# vi spark-defaults.conf
+    #+ cat spark-defaults.conf
+    #spark.executor.memory         16g
+    #spark.driver.memory            4g
+    #spark.driver.maxResultSize      0
+    
     spark = SparkSession.builder.config(conf=conf).getOrCreate()
     return spark
 

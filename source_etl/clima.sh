@@ -1,5 +1,8 @@
 #!/bin/bash
 set -x
+
+export CTRNA_LOG_PATH=/home/etl-rebios/etl-log/
+
 # Caminho da pasta onde os arquivos estão localizados
 pasta="/home/etl-rebios/etl-files"
 
@@ -7,7 +10,7 @@ pasta="/home/etl-rebios/etl-files"
 script="spark-submit"
 
 # Loop através de todos os arquivos na pasta
-for arquivo in "$pasta"/BR-DWGD*.parquet; do
+for arquivo in "$pasta"/POLUICAO*.parquet; do
   # Verifica se é um arquivo regular
   if [ -f "$arquivo" ]; then
     # Extrai o nome do arquivo

@@ -1876,14 +1876,25 @@ if sys.argv[1] == 'CLIMATE':
 		logger.info("Loading external data from CLIMATE to Climaterna database.")
 
 		df_climate = spark.read.parquet(os.path.join(sys.argv[2], sys.argv[3]))
+		#df_climate.show()
 
 		logger.info("Loading file: %s ", os.path.join(sys.argv[2], sys.argv[3]))
 
+		logger.info("Loading info from Locations...")
+		df_location = spark.read.format("iceberg").load(f"bios.rebios.location").filter(FSql.col("county").isNotNull())
+		#df_location.show()
+
+		df_climate = (df_climate.join(df_location, [df_climate.code_muni == df_location.location_source_value], 'left'))
+		#df_climate.show()
+
 		df_states = loadStates(spark, logger)
 		#df_load = df_load.withColumn("COD_UF", FSql.substring("geocodigo", 1, 2))
-		df_climate = (df_climate.join(df_states, [df_climate.code_state == df_states.codigo_uf], 'inner'))
+		df_climate = (df_climate.join(df_states, [df_climate.county == df_states.codigo_uf], 'left'))
+		#df_climate.show()
 
+		logger.info("Writing input data to Climaterna table...")
 		df_climate_schema = StructType([ \
+		StructField("location_id", LongType(), True), \
 		StructField("city_code", StringType(), True), \
 		StructField("city_name", StringType(), True), \
 		StructField("state_code", StringType(), True), \
@@ -1922,11 +1933,11 @@ if sys.argv[1] == 'CLIMATE':
 		StructField("wind_speed_max_value", FloatType(), True), \
 		StructField("wind_speed_stdev_value", FloatType(), True), \
 		StructField("wind_speed_sum_value", FloatType(), True), \
-		StructField("Evapotranspiration_mean_value", FloatType(), True), \
-		StructField("Evapotranspiration_min_value", FloatType(), True), \
-		StructField("Evapotranspiration_max_value", FloatType(), True), \
-		StructField("Evapotranspiration_stdev_value", FloatType(), True), \
-		StructField("Evapotranspiration_sum", FloatType(), True), \
+		StructField("evapotranspiration_mean_value", FloatType(), True), \
+		StructField("evapotranspiration_min_value", FloatType(), True), \
+		StructField("evapotranspiration_max_value", FloatType(), True), \
+		StructField("evapotranspiration_stdev_value", FloatType(), True), \
+		StructField("evapotranspiration_sum_value", FloatType(), True), \
 		StructField("ethane_c2h6", FloatType(), True), \
 		StructField("acetone_ch3coch3", FloatType(), True), \
 		StructField("methane_ch4", FloatType(), True), \
@@ -1947,10 +1958,21 @@ if sys.argv[1] == 'CLIMATE':
 		# *************************************************************
 		# Populando o dataframe com os regisros de entrada para consistir nulos e não-nulos
 		# e aplicando o novo esquema ao DataFrame e copiando os dados.
+
+		# Variavel Descricao Unidade
+		# Tmin Temperatura Mınima ◦C
+		# Tmax Temperatura Maxima ◦C
+		# pr Precipitacao mm
+		# RH Umidade Relativa %
+		# Rs Radiacao Solar MJ/m2
+		# u2 Velocidade do Vento m/s
+		# ETo Evapotranspiracao mm
+
 		if any(field.name == "name_state" for field in df_climate.schema.fields):
 			df_climate_iceberg=spark.createDataFrame(df_climate.select( \
+			df_climate.location_id.cast(LongType()).alias('location_id'), \
 			df_climate.code_muni.alias('city_code'), \
-			df_climate.name_muni.alias('city_name'), \
+			df_climate.city.alias('city_name'), \
 			df_climate.code_state.alias('state_code'), \
 			df_climate.abbrev_state.alias('state_abbreviation'), \
 			df_climate.name_state.alias('state_name'), \
@@ -1972,31 +1994,31 @@ if sys.argv[1] == 'CLIMATE':
 			df_climate.PR_max.alias('precipitation_max_value'), \
 			df_climate.PR_stdev.alias('precipitation_stdev_value'), \
 			df_climate.PR_sum.alias('precipitation_sum_value'), \
-			df_climate.ETo_mean.alias('relative_humidity_mean_value'), \
-			df_climate.ETo_min.alias('relative_humidity_min_value'), \
-			df_climate.ETo_max.alias('relative_humidity_max_value'), \
-			df_climate.ETo_stdev.alias('relative_humidity_stdev_value'), \
-			df_climate.ETo_sum.alias('relative_humidity_sum_value'), \
-			df_climate.RH_mean.alias('solar_radiaton_mean_value'), \
-			df_climate.RH_min.alias('solar_radiaton_min_value'), \
-			df_climate.RH_max.alias('solar_radiaton_max_value'), \
-			df_climate.RH_stdev.alias('solar_radiaton_stdev_value'), \
+			df_climate.RH_mean.alias('relative_humidity_mean_value'), \
+			df_climate.RH_min.alias('relative_humidity_min_value'), \
+			df_climate.RH_max.alias('relative_humidity_max_value'), \
+			df_climate.RH_stdev.alias('relative_humidity_stdev_value'), \
+			FSql.lit(None).alias('relative_humidity_sum_value'), \
+			df_climate.Rs_mean.alias('solar_radiaton_mean_value'), \
+			df_climate.Rs_min.alias('solar_radiaton_min_value'), \
+			df_climate.Rs_max.alias('solar_radiaton_max_value'), \
+			df_climate.Rs_stdev.alias('solar_radiaton_stdev_value'), \
 			FSql.lit(None).alias('solar_radiaton_sum_value'), \
-			df_climate.Rs_mean.alias('wind_speed_mean_value'), \
-			df_climate.Rs_min.alias('wind_speed_min_value'), \
-			df_climate.Rs_max.alias('wind_speed_max_value'), \
-			df_climate.Rs_stdev.alias('wind_speed_stdev_value'), \
+			df_climate.u2_mean.alias('wind_speed_mean_value'), \
+			df_climate.u2_min.alias('wind_speed_min_value'), \
+			df_climate.u2_max.alias('wind_speed_max_value'), \
+			df_climate.u2_stdev.alias('wind_speed_stdev_value'), \
 			FSql.lit(None).alias('wind_speed_sum_value'), \
-			df_climate.u2_mean.alias('Evapotranspiration_mean_value'), \
-			df_climate.u2_min.alias('Evapotranspiration_min_value'), \
-			df_climate.u2_max.alias('Evapotranspiration_max_value'), \
-			df_climate.u2_stdev.alias('Evapotranspiration_stdev_value'), \
-			FSql.lit(None).alias('Evapotranspiration_sum'), \
+			df_climate.ETo_mean.alias('evapotranspiration_mean_value'), \
+			df_climate.ETo_min.alias('evapotranspiration_min_value'), \
+			df_climate.ETo_max.alias('evapotranspiration_max_value'), \
+			df_climate.ETo_stdev.alias('evapotranspiration_stdev_value'), \
+			df_climate.ETo_sum.alias('evapotranspiration_sum_value'), \
 			df_climate.c2h6.alias('ethane_c2h6'), \
 			df_climate.ch3coch3.alias('acetone_ch3coch3'), \
 			df_climate.ch4.alias('methane_ch4'), \
-			df_climate.co2s.alias('carbon_monoxide_co'), \
-			df_climate.co.alias('carbon_dioxide_co2s'), \
+			df_climate.co2s.alias('carbon_dioxide_co2s'), \
+			df_climate.co.alias('carbon_monoxide_co'), \
 			df_climate.hcl.alias('hydrogen_chloride_hcl'), \
 			df_climate.mmrpm10.alias('max_to_min_concentration_rate_mmrpm10'), \
 			df_climate.mmrpm2p5.alias('max_to_min_concentration_rate_mmrpm2p5'), \
@@ -2006,8 +2028,9 @@ if sys.argv[1] == 'CLIMATE':
 			).rdd, df_climate_schema)
 		else:
 			df_climate_iceberg=spark.createDataFrame(df_climate.select( \
+			df_climate.location_id.cast(LongType()).alias('location_id'), \
 			df_climate.code_muni.alias('city_code'), \
-			df_climate.name_muni.alias('city_name'), \
+			df_climate.city.alias('city_name'), \
 			df_climate.code_state.alias('state_code'), \
 			df_climate.abbrev_state.alias('state_abbreviation'), \
 			df_climate.nome_uf.alias('state_name'), \
@@ -2029,31 +2052,31 @@ if sys.argv[1] == 'CLIMATE':
 			df_climate.PR_max.alias('precipitation_max_value'), \
 			df_climate.PR_stdev.alias('precipitation_stdev_value'), \
 			df_climate.PR_sum.alias('precipitation_sum_value'), \
-			df_climate.ETo_mean.alias('relative_humidity_mean_value'), \
-			df_climate.ETo_min.alias('relative_humidity_min_value'), \
-			df_climate.ETo_max.alias('relative_humidity_max_value'), \
-			df_climate.ETo_stdev.alias('relative_humidity_stdev_value'), \
-			df_climate.ETo_sum.alias('relative_humidity_sum_value'), \
-			df_climate.RH_mean.alias('solar_radiaton_mean_value'), \
-			df_climate.RH_min.alias('solar_radiaton_min_value'), \
-			df_climate.RH_max.alias('solar_radiaton_max_value'), \
-			df_climate.RH_stdev.alias('solar_radiaton_stdev_value'), \
+			df_climate.RH_mean.alias('relative_humidity_mean_value'), \
+			df_climate.RH_min.alias('relative_humidity_min_value'), \
+			df_climate.RH_max.alias('relative_humidity_max_value'), \
+			df_climate.RH_stdev.alias('relative_humidity_stdev_value'), \
+			FSql.lit(None).alias('relative_humidity_sum_value'), \
+			df_climate.Rs_mean.alias('solar_radiaton_mean_value'), \
+			df_climate.Rs_min.alias('solar_radiaton_min_value'), \
+			df_climate.Rs_max.alias('solar_radiaton_max_value'), \
+			df_climate.Rs_stdev.alias('solar_radiaton_stdev_value'), \
 			FSql.lit(None).alias('solar_radiaton_sum_value'), \
-			df_climate.Rs_mean.alias('wind_speed_mean_value'), \
-			df_climate.Rs_min.alias('wind_speed_min_value'), \
-			df_climate.Rs_max.alias('wind_speed_max_value'), \
-			df_climate.Rs_stdev.alias('wind_speed_stdev_value'), \
+			df_climate.u2_mean.alias('wind_speed_mean_value'), \
+			df_climate.u2_min.alias('wind_speed_min_value'), \
+			df_climate.u2_max.alias('wind_speed_max_value'), \
+			df_climate.u2_stdev.alias('wind_speed_stdev_value'), \
 			FSql.lit(None).alias('wind_speed_sum_value'), \
-			df_climate.u2_mean.alias('Evapotranspiration_mean_value'), \
-			df_climate.u2_min.alias('Evapotranspiration_min_value'), \
-			df_climate.u2_max.alias('Evapotranspiration_max_value'), \
-			df_climate.u2_stdev.alias('Evapotranspiration_stdev_value'), \
-			FSql.lit(None).alias('Evapotranspiration_sum'), \
+			df_climate.ETo_mean.alias('evapotranspiration_mean_value'), \
+			df_climate.ETo_min.alias('evapotranspiration_min_value'), \
+			df_climate.ETo_max.alias('evapotranspiration_max_value'), \
+			df_climate.ETo_stdev.alias('evapotranspiration_stdev_value'), \
+			df_climate.ETo_sum.alias('evapotranspiration_sum_value'), \
 			df_climate.c2h6.alias('ethane_c2h6'), \
 			df_climate.ch3coch3.alias('acetone_ch3coch3'), \
 			df_climate.ch4.alias('methane_ch4'), \
-			df_climate.co2s.alias('carbon_monoxide_co'), \
-			df_climate.co.alias('carbon_dioxide_co2s'), \
+			df_climate.co2s.alias('carbon_dioxide_co2s'), \
+			df_climate.co.alias('carbon_monoxide_co'), \
 			df_climate.hcl.alias('hydrogen_chloride_hcl'), \
 			df_climate.mmrpm10.alias('max_to_min_concentration_rate_mmrpm10'), \
 			df_climate.mmrpm2p5.alias('max_to_min_concentration_rate_mmrpm2p5'), \
@@ -2062,6 +2085,8 @@ if sys.argv[1] == 'CLIMATE':
 			df_climate.so2.alias('sulfur_dioxide_so2') \
 			).rdd, df_climate_schema)
 			
+
+		#df_climate_iceberg.show()
 
 		# persistindo os dados de observation_period no banco.
 		if df_climate_iceberg.count() > 0:
