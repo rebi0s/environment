@@ -5,7 +5,7 @@ from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOpe
 from airflow.utils.dates import days_ago
 
 default_args = {
-    'owner': 'airflow',
+    'owner': 'root',
     'retry_delay': timedelta(minutes=5),
 }
 
@@ -19,7 +19,7 @@ spark_dag = DAG(
 )
 
 Extract = SparkSubmitOperator(
-                application = "/opt/airflow/dags/spark_etl_script_docker.py",
+                application = "/opt/airflow/dags/spark_etl_test.py",
                 conn_id= 'spark_local',
                 task_id='spark_submit_task',
                 dag=spark_dag

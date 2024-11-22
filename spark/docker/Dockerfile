@@ -17,6 +17,15 @@ RUN apt-get update && \
 
 RUN update-alternatives --install "/usr/bin/python" "python" "$(which python3)" 1
 
+# Installing prerequisite packages
+RUN DEBIAN_FRONTEND="noninteractive" apt-get update && apt-get install
+RUN apt-get -y install curl unzip groff less
+
+# AWS CLI installation commands
+RUN	curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+RUN	unzip awscliv2.zip && ./aws/install
+
+
 ENV SPARK_VERSION=3.4.0 \
     HADOOP_VERSION=3 \
     SCALA_VERSION=2.13 \
@@ -49,10 +58,10 @@ ENV SPARK_MASTER_LOG=$SPARK_LOG_DIR/spark-master.out \
     SPARK_WORKER_LOG=$SPARK_LOG_DIR/spark-worker.out \
     SPARK_WORKER_WEBUI_PORT=8080 \
     SPARK_WORKER_PORT=7000 \
-    SPARK_MASTER="spark://host.docker.internal:7077" \
+    SPARK_MASTER="spark://spark-master:7077" \
     SPARK_WORKLOAD="master"
 
-EXPOSE 8080 7077 6066 10000 10025 10026 10027
+EXPOSE 8080 7077 6066 10000
 
 RUN mkdir -p $SPARK_LOG_DIR && \
     touch $SPARK_MASTER_LOG && \
@@ -83,7 +92,6 @@ ENV PATH=$PATH:/opt/spark/bin:/opt/spark/sbin
 RUN echo "spark.executor.memory         4g" > /opt/spark/conf/spark-defaults.conf && \
     echo "spark.driver.maxResultSize	0" >> /opt/spark/conf/spark-defaults.conf
 
- 
 ##SPARK-SQL will work at minio simulating AWS S3
 ENV DEPENDENCIES="org.postgresql:postgresql:42.6.0\
 ,org.apache.iceberg:iceberg-bundled-guava:1.5.0\

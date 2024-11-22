@@ -9,6 +9,9 @@ services:
             - 9090:8080
             - 7077:7077
             - 10000:10000
+            - 10025:10025
+            - 10026:10026
+            - 10027:10027
         restart: always
         volumes:
             - ../../spark/master/apps:/opt/spark-apps
@@ -17,7 +20,7 @@ services:
             - ../../spark/master/spark-events:/workspace/spark-events
             - ../../spark/etl-rebios:/home/etl-rebios
         environment:
-            - SPARK_LOCAL_IP=spark-master
+            - SPARK_LOCAL_IP=host.docker.internal
             - SPARK_WORKLOAD=master
         extra_hosts:
             - host.docker.internal:host-gateway
@@ -43,7 +46,7 @@ services:
         depends_on:
             - spark-master
         environment:
-            - SPARK_MASTER=spark://spark-master:7077
+            - SPARK_MASTER=spark://host.docker.internal:7077
             - SPARK_WORKER_CORES=2
             - SPARK_WORKER_MEMORY=4G
             - SPARK_DRIVER_MEMORY=4G
@@ -79,7 +82,7 @@ services:
         depends_on:
             - spark-master
         environment:
-            - SPARK_MASTER=spark://spark-master:7077
+            - SPARK_MASTER=spark://host.docker.internal:7077
             - SPARK_WORKER_CORES=2
             - SPARK_WORKER_MEMORY=4G
             - SPARK_DRIVER_MEMORY=4G
