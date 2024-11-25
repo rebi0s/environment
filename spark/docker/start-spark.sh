@@ -1,6 +1,6 @@
 #!/bin/bash
 
-/run-maven.sh
+# /run-maven.sh
 
 . "/opt/spark/bin/load-spark-env.sh"
 

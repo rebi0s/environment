@@ -30,9 +30,6 @@ pyspark --packages $DEPENDENCIES \
     --conf spark.sql.catalog.bios.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
     --conf spark.sql.catalog.bios.s3.endpoint=${S3_ENDPOINT} \
     --conf spark.sql.catalog.spark_catalog=org.apache.iceberg.spark.SparkSessionCatalog \
-    --conf spark.eventLog.enabled=true \
-    --conf spark.eventLog.dir=/workspace/spark-events \
-    --conf spark.history.fs.logDirectory= /workspace/spark-events \
     --conf spark.sql.catalogImplementation=in-memory \
     --conf spark.executor.memory=6g \
     --conf spark.driver.memory=4g
