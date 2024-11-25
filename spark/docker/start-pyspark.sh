@@ -19,18 +19,21 @@ then
 fi
 
 pyspark --packages $DEPENDENCIES \
+    --conf spark.sql.defaultCatalog=${BIOS_CATALOG} \
     --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \
     --conf spark.sql.catalog.bios=org.apache.iceberg.spark.SparkCatalog \
     --conf spark.sql.catalog.bios.catalog-impl=org.apache.iceberg.jdbc.JdbcCatalog \
-    --conf spark.sql.catalog.bios.uri=jdbc:postgresql://host.docker.internal:5420/db_iceberg \
-    --conf spark.sql.catalog.bios.jdbc.user=icbergcat \
-    --conf spark.sql.catalog.bios.jdbc.password=hNXz35UBRcAC \
-    --conf spark.sql.catalog.bios.warehouse=s3a://${S3_BUCKET}/rebios \
+    --conf spark.sql.catalog.bios.uri=${POSTGRES_CONNECTION_STRING}\
+    --conf spark.sql.catalog.bios.jdbc.user=${POSTGRES_USER} \
+    --conf spark.sql.catalog.bios.jdbc.password=${POSTGRES_PASSWORD} \
+    --conf spark.sql.catalog.bios.warehouse=${S3_FULL_URL} \
     --conf spark.sql.catalog.bios.io-impl=org.apache.iceberg.aws.s3.S3FileIO \
     --conf spark.sql.catalog.bios.s3.endpoint=${S3_ENDPOINT} \
     --conf spark.sql.catalog.spark_catalog=org.apache.iceberg.spark.SparkSessionCatalog \
+    --conf spark.eventLog.enabled=true \
+    --conf spark.eventLog.dir=/workspace/spark-events \
+    --conf spark.history.fs.logDirectory= /workspace/spark-events \
     --conf spark.sql.catalogImplementation=in-memory \
-    --conf spark.sql.defaultCatalog=bios \
     --conf spark.executor.memory=6g \
     --conf spark.driver.memory=4g
 

@@ -20,7 +20,7 @@ services:
             - ../../spark/master/spark-events:/workspace/spark-events
             - ../../spark/etl-rebios:/home/etl-rebios
         environment:
-            - SPARK_LOCAL_IP=host.docker.internal
+            - SPARK_LOCAL_IP=spark_master
             - SPARK_WORKLOAD=master
         extra_hosts:
             - host.docker.internal:host-gateway
