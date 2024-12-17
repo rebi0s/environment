@@ -23,3 +23,16 @@ To input datasets in the repository in a managed way, the architecture uses the 
 
 All these tools supporting the implementation of components are open-source to comply with the openness principles of the reBI0S repository. Furthermore, they are all deployed in the **Infrastructure**, a cloud or on-premises infrastructure. To allow such flexibility, all the integration and deployment of these components is automated using [Ansible](https://www.ansible.com), an engine for automation infrastructure as code. 
 
+# Repository Structure
+
+This repository is organized following the structure below:
+- hue: contains container definitions for HUE and configuration files to be overwritten.
+- iceberg-base: contains container PostgreSQL container definition and configuration for using it as iceberg catalogs.
+- minio: contains container definitions for installing MinIO when no S3 storage is available.
+- rebios-kubernetes: contains cluster configuration for deploying reBI0S in a k8s cluster.
+- spark: contains container definitions for Apache Spark and configuration and startup scripts.
+- superset: contains container definitions for Apache Superset and configuration files to be overwritten.
+
+Besides the folders of each component, the root folder contains several scripts (sh) to start and stop each component separately or altogether.
+
+
