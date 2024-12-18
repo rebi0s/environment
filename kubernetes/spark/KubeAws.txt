@@ -1,0 +1,724 @@
+#Instance Connection
+ssh -i "reBI0S_key.pem" ubuntu@ec2-3-141-23-206.us-east-2.compute.amazonaws.com
+
+###########################
+#Install Docker on AWS
+###########################
+#First, update your existing list of packages:
+sudo apt update
+
+#Upgrade your system
+sudo apt upgrade
+
+#Next, install a few prerequisite packages which let apt use packages over HTTPS:
+sudo apt install apt-transport-https ca-certificates curl software-properties-common
+
+#Then add the GPG key for the official Docker repository to your system:
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+#Add the Docker repository to APT sources:
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+
+#Make sure you are about to install from the Docker repo instead of the default Ubuntu repo:
+apt-cache policy docker-ce
+
+#Finally, install Docker:
+sudo apt install docker-ce
+
+#Check that it’s running:
+sudo systemctl status docker
+
+#Executing the Docker Command Without Sudo
+sudo usermod -aG docker ${USER}
+
+###########################
+#Install Microk8s on AWS
+###########################
+sudo snap install microk8s --classic
+
+#Create Kubectl config folder
+mkdir ~/.kube 
+
+kubectl config set-cluster microk8s-cluster --server=https://172.31.23.112:16443 --insecure-skip-tls-verify
+
+kubectl config set-cluster microk8s-cluster --server=https://172.31.34.216:16443 --insecure-skip-tls-verify
+
+kubectl config set-context microk8s --user=admin --cluster=microk8s-cluster
+
+kubectl config use-context microk8s
+
+PASSWORD=$(microk8s.kubectl config view | grep password | cut -d' ' -f6-)
+
+kubectl config set-cluster microk8s --server=https://127.0.0.1:16443/ --certificate-authority=/var/snap/microk8s/current/certs/ca.crt
+kubectl config set-credentials microk8s-admin --token LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFb3dJQkFBS0NBUUVBd3RkNnlZc2FLNU9MeW90TFhRTE51TCtEWEU2ZFJ4ZDFJajhZVjJTZGZTZGZaV0lpCkNmcVQyQ09RdnBHemY3bWJsZFlLTkY0Y3RydGE2U0h6OWIzSUlvZHFYQkhtdG4wR1ovZHl4TXI4b0YrdWdpbWQKejRSOFg5Y25wUGEwc3ZiM3dPS1hJM0xDdjNEQmRzR3ZadFAxUjZvRG1NdXc5WHQ4ZlBObVIvd1hKTmlLOWlHeQpqdFVUUzArMG5vUXBwdmRaTDhuQUx4czNjWFJ6Z2ZzL1pma0lObFl2M2tjSW1yV2ozSjk1c0NGUTd3a3A3bytGCnYxVW42WGlLM2x4L2JqSGk4Rml2OFQweGhrc3ZIL0NHQlJ5ZS9KNnVWMTkxZ3FMaXdNWkVRM3pPdytDN29uM24KWlNKVmpCN2xjNXNQYlBQWTluMVMrT1hrbEh5anhRRERRZ1BjM1FJREFRQUJBb0lCQURtZDV0MTZtUDZSM3lEQwpHRU1rOVJqUTZWTittOXZPQUFGa2p4b28wcm1UenczMyt3RGdiSi9aeEkvV0hqS0MvSk5PZkM0SU5vMkMwZHRuCkF2R0VjWTVrWlB0Yy85Q3ZJQm5XZnNYYkVPR0w2ZHJyMjVMbUpyRmd1b1I1disyOFFuOXpnaVlsWlptZkNsYkgKNThxTW0xZloycjV3WFovNktGSDYyQ0FwVjk2NDloNE0yR29ScmlqUW1kdUc1ZXNkWndON2FTOWNyM0lucGt1aApxSG9TNDE0S215WFdZajduUTZITHE4emk1bGdqQTd1VzNPNlgzZVRPWUJvTVpNTWFELzlWRlNsUHBaUm0vNlo4CkFkMksxTVlhdzZveGpXdThIczJRWDV0bU1ETGhxSG1oL01PMVV5NXo4bHpNMmtEV3RiUFNOVlJnSHQ1dUJCQnYKRzdSU0dRRUNnWUVBNU9HRUdPbjJaWXNldThOcElhOTd4M2FaNTkrU1ZaZTQ1Mm1NYWFlUUNYVkhzSnA1THlZVApvcHBzcFQvTS9tVFdzcG5mcUdaQTdFcEc3L0hHd2w0S3lpNXZVN3p0L2NuckJlaDBaTXFPRlZjTEIwWi9NTGtiCmZSZUpHUXhFQ1RuQmMvZVora3NKUnJWNkYwRW5JVllxWVpWa3hBWHRmdXhoV1BKcEVHS0RhM0VDZ1lFQTJlMTUKOUc4YkgxSEd1NEpoY2U3aEN2bVFlaEJlWFFmNlVCUzhJcTN1M2hhRnZKcVl2d1VFNGxXWmE0eE1QNVZ2QlNxWAorWmpZQzBRbWYwakgyRHA5ME5PWkY3OWVSb3Vtd0hqbkgwRFYxcDZPTDluTmhDMEFvSEtRQU5lNFJtV3hPaGo0CjN3WlBFckxVeFlXVHpjaGMyY2h5dk5USDJWYVE0RzFyTlJMSW1pMENnWUFNelppb0ZCNVdXOHZpVVBJR2tseG8KTWZnMkFrbWJSQnR4eG5PMlRVcy9YRElnYk9PdWdZRERyY082RXJHUzRXMHBISFpvWXgvcWw5VVVBd0JOU3hscgphZUdNVzVzc2dTa0djWlJoTnZ0dnNpakp4V1hFQWZiSnJwRmF0MWJ1OVM0ZklKQ2FjYXdaS25tajUxOGEvRWp1Cm9INjhnR0Jpb3pKbTJWaUxOQmVKNFFLQmdRRFRmV3g2TkEwZFF1NWJjTGVDcXpISXhkTlpNbU54WTFtZnQ4K3cKMUIxWmVJQUhQZno0ZkRWMk5WNHppaTlCRVpOeGJ4bVh4Nlg2b1FPL1NQRnd2YXIyS3pPS1lWUnJvQUdQRG9ZMQp4V1VBNkZUU3lVdHlkMzRCTjh6YWxIOG9DbTZKRkUwSm00VEhmN2VQalFlWWtGYlRuMzBDRm5sd1NWdEdBY29sCjhubXRiUUtCZ0UrTHRLM1pkVFhSLzlZVXRUdDBiNEFIbnFLU1NXcEUrS0o0YWhUaXZxTGZNQ3RUeEIzZUZKaysKUU1HWGhtdkVrb0xMMFA5YzYwaWM1KzJBNWIrSG1UMWtyUmpVOTVxamQ5MStlYnlxOUdkcTZEQ1ZzYlNlMndTOQoxTWdaWFdXT2NUSmZwUEVsNVVHaGVYTUQrdFJWamtoa1M3d3RJRHFLUytzNG1kOHdQUXMyCi0tLS0tRU5EIFJTQSBQUklWQVRFIEtFWS0tLS0tCg
+kubectl config set-context microk8s --cluster=microk8s --namespace=default --user=microk8s-admin
+
+#Add user to microk8s group
+sudo usermod -a -G microk8s ubuntu
+sudo chown -R ubuntu ~/.kube
+
+#Install Kubernetes Add-Ons
+microk8s enable dashboard dns registry istio
+
+#Check the installed namespaces
+kc get all - all-namespaces
+
+#Get Secret for dashboard
+microk8s kubectl describe secret -n kube-system microk8s-dashboard-token
+kc describe secret -n kube-system microk8s-dashboard-token
+
+kc describe secret -n kube-system microk8s-dashboard-token
+
+#To Access to the MicroK8S dashboard from public IP that we have to edit config file.
+kc -n kube-system edit service kubernetes-dashboard
+
+
+#List the Services
+kc -n kube-system get services -o wide
+
+#Get Cluster Info
+kc cluster-info
+
+#Configure microk8s
+mkdir ~/.kube
+microk8s config > ~/.kube/config 
+
+#Access Dashboard
+#Create Cluster Port Forward
+kc port-forward -n kube-system service/kubernetes-dashboard 10443:443 --address 0.0.0.0
+
+#Create SSH Tunnel
+ssh -i "reBI0S_key.pem" -L 10443:localhost:10443 ubuntu@ec2-3-141-23-206.us-east-2.compute.amazonaws.com
+
+#Acess Dashboard
+https://localhost:10443
+
+
+https://ec2-3-141-23-206.us-east-2.compute.amazonaws.com:10443
+
+http://ec2-3-141-23-206.us-east-2.compute.amazonaws.com:31940
+
+eyJhbGciOiJSUzI1NiIsImtpZCI6IjlHcVM5TXA1NDFSczV0T0p1UUV5ejJqa3NJSUN1UjZHOUpac29oVS03a28ifQ.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJrdWJlLXN5c3RlbSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VjcmV0Lm5hbWUiOiJtaWNyb2s4cy1kYXNoYm9hcmQtdG9rZW4iLCJrdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3NlcnZpY2UtYWNjb3VudC5uYW1lIjoiZGVmYXVsdCIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50LnVpZCI6ImMxYmM0MDQ1LTAwNWItNGNhYy05MWE3LTUyN2YyMzRhODFiMCIsInN1YiI6InN5c3RlbTpzZXJ2aWNlYWNjb3VudDprdWJlLXN5c3RlbTpkZWZhdWx0In0.GuRyE1qizrjeo3WWCdj8RZzGpSQUCG_WE3sz8QaNMT-ArggRFXq1x0HaTrTka6pWA6WLXLTeUCt8Rxdv6RtEqNjnSzxy5Cz309X210k8vp4EOL3VdMv2A6-Wp3OvDKIFme94gRF0ZcENO7hOhfRV53h1jMZ00Kqkp6OPR1w1xwaw_mv6Di8NMLuYrY8Jj4hTZlwEim8AZ5oZ0dKTtuSQMcIHQK5VoPBj3QE3DOUXKpNKc1tEIrWKK6d5nMOEokhA_7KTPk52d43J3v0oc2ehpOxUwAhStDDQHGJvQT_rJF-8aXJ9ofYe_wTWstsh5b2sXFFpB5v99hWjDKy-6fNQng
+
+#Install Postgres
+
+kc create namespace psql-dev
+kc apply -n psql-dev -f psql-secret.yaml
+kc delete pv postgres-volume-0.yaml
+kc delete pv postgres-volume-1.yaml 
+kc apply -n psql-dev -f psql-pv.yaml
+kc apply -n psql-dev -f psql-pvclaim.yaml 
+
+helm upgrade --cleanup-on-fail \
+  --namespace psql-dev \
+  --install datasaku-postgres oci://registry-1.docker.io/bitnamicharts/postgresql-ha \
+  --version=14.3.4 \
+  --values config.yaml
+
+
+
+
+
+  
+kc apply -n psql-dev  -f pgadmin-secret.yaml
+kc apply -n psql-dev  -f pgadmin-deployment.yaml
+kc apply -n psql-dev  -f pgadmin-service.yaml  
+
+#Cluster pgadmin port forward  
+kc port-forward -n rebios-postgres service/postgres  5432:5432 --address 0.0.0.0
+  
+#Create Tunnel for Pgadmin
+ssh -i "reBI0S_key.pem" -L 5432:localhost:5432 ubuntu@ec2-3-141-23-206.us-east-2.compute.amazonaws.com
+
+
+
+kc create namespace rebios-postgres
+
+
+
+#log on to PGAdmin by using admin@admin.com and admin123 
+#host address datasaku-postgres-postgresql-ha-pgpool-dev.svc.cluster.local
+#port 5433
+#username postgres 
+
+################################################################
+#Export Iceberg Dump
+#
+
+sudo docker exec -it iceberg_postgres_db bash
+
+psql --dbname=db_hue --user=postgres --port=5432
+
+pg_dump -U postgres -W -F c -d db_iceberg > db_iceberg.dump
+
+pg_dump -U postgres -W -F c -d db_hue > db_hue.dump
+
+pg_dump -U postgres -W -F c -d examples > examples.dump
+
+################################################
+#Copy Dump File
+sudo docker cp iceberg_postgres_db:/home/db_iceberg.dump . 
+
+sudo docker cp iceberg_postgres_db:/home/db_hue.dump . 
+
+sudo docker cp iceberg_postgres_db:/home/examples.dump . 
+
+sudo docker cp iceberg_postgres_db:/home/airflow.dump . 
+
+aws s3 cp s3://rebios-test-env/rebios-backup/workspace.zip .
+
+aws s3 cp s3://rebios-test-env/rebios-backup/dashboard_export.zip .
+
+aws s3 cp db_backup.zip  s3://rebios-test-env/rebios-backup/
+
+aws s3 cp workspace.zip  s3://rebios-test-env/rebios-backup/
+
+aws s3 cp dashboard_export.zip s3://rebios-test-env/rebios-backup/
+
+aws s3 cp environment.zip  s3://rebios-test-env/rebios-backup/
+
+aws s3 cp s3://rebios-test-env/rebios-backup/environment.zip .
+
+
+aws s3 cp spark.zip  s3://rebios-test-env/rebios-backup/
+
+aws s3 cp  s3://rebios-test-env/rebios-backup/spark.zip .
+#Copy Dump to S3
+aws s3 cp db_iceberg.dump  s3://rebios-test-env/rebios-backup/
+
+aws s3 cp db_hue.dump  s3://rebios-test-env/rebios-backup/
+
+#Copy Dump From S3
+aws s3 cp  s3://rebios-test-env/rebios-backup/db_bakup_2024_11_28.zip .
+
+aws s3 cp  s3://rebios-test-env/rebios-backup/db_hue.dump .
+
+aws s3 cp s3://rebios-kubernetes/iceberg.zip .
+
+
+aws s3 cp db.zip  s3://rebios-test-env/rebios-backup/
+
+aws s3 cp s3://rebios-test-env/rebios-backup/db.zip .
+
+
+kc delete namespace rebios-postgres 
+
+
+kc create namespace rebios-postgres 
+
+
+sudo vim postgres-configmap.yaml
+
+
+kc apply -n rebios-postgres -f postgres-configmap.yaml
+
+
+kc get configmap
+
+kc apply -n rebios-postgres -f psql-pv.yaml
+
+kc get pv
+
+kc apply -n rebios-postgres -f psql-claim.yaml
+
+kc -n rebios-postgres get pvc
+
+kc apply -n rebios-postgres -f ps-deployment.yaml
+
+kc -n rebios-postgres get deployments
+
+
+#Check Postgres pods
+
+kc get pods -n rebios-postgres
+
+kc get services -n rebios-postgres
+
+postgres-59d7fddd4-fns6p
+
+kc apply -n rebios-postgres -f ps-service.yaml
+
+kc get svc -n rebios-postgres
+
+32038
+
+
+aws s3 cp  s3://rebios-test-env/rebios-backup/db_superset_20241210.dump .
+
+
+kc exec -n rebios-postgres -it postgres-59d7fddd4-4tdf7 -- /bin/bash
+
+psql -h localhost -U postgres --password -p 5432 
+
+kc cp -n rebios-postgres db_iceberg.dump postgres-59d7fddd4-4tdf7:/tmp/db_iceberg.dump
+
+kc cp -n rebios-postgres db_hue.dump postgres-59d7fddd4-4tdf7:/tmp/db_hue.dump
+
+kc cp -n rebios-postgres db_superset.dump postgres-59d7fddd4-4tdf7:/tmp/db_superset.dump
+
+kc exec -it -n rebios-postgres postgres-59d7fddd4-64p7d -- /bin/bash
+
+psql --user=postgres --port=5432
+
+psql --user=icbergcat --dbname=db_iceberg --port=5432
+
+pg_restore  --dbname=db_iceberg --user=postgres --port=5432 --clean -d db_iceberg /tmp/db_iceberg.dump
+pg_restore  --dbname=db_hue --user=postgres --port=5432 --clean -d db_hue /tmp/db_hue.dump
+pg_restore  --dbname=db_superset --user=postgres --port=5432 --clean -d db_superset /tmp/db_superset.dump
+
+psql -U postgres -d db_iceberg -f /tmp/db_iceberg.dump
+
+select  * from escala_mortalidade;
+select  * from municipios;
+
+################################################################
+#Spark Configuration
+#
+#
+#
+#
+#Check the installed namespaces
+
+sudo docker login --username jrosses --password DtrifNopan@111727
+
+sudo docker tag spark-spark-master jrosses/rebios-spark:1.0.3
+
+sudo docker pull jrosses/rebios-superset:1.0.1
+
+
+sudo docker  build -f spark.dockerfile -t jrosses/rebios-spark:1.0.1 .
+
+sudo docker push jrosses/rebios-spark:1.0.1
+
+sudo docker tag superset-superset jrosses/rebios-superset:1.0.1
+
+
+sudo docker push jrosses/rebios-superset:1.0.1
+
+sudo docker push jrosses/rebios-spark:1.0.3
+
+
+
+kc get namespaces
+
+kc delete namespace rebios-spark
+kc delete pv spark-master-volume-0 
+kc delete pv spark-master-volume-1 
+kc delete pv spark-master-volume-2 
+kc delete pv spark-master-volume-3 
+kc delete pv spark-master-volume-4
+kc delete pv spark-worker-a-volume-0 
+kc delete pv spark-worker-a-volume-1 
+kc delete pv spark-worker-a-volume-2 
+kc delete pv spark-worker-a-volume-3 
+kc delete pv spark-worker-b-volume-0 
+kc delete pv spark-worker-b-volume-1 
+kc delete pv spark-worker-b-volume-2 
+kc delete pv spark-worker-b-volume-3 
+
+
+kc create namespace rebios-spark
+kc apply -n rebios-spark -f spark-master-pv.yaml
+kc apply -n rebios-spark -f spark-master-pvclaim.yaml
+kc apply -n rebios-spark -f spark-worker-a-pv.yaml
+kc apply -n rebios-spark -f spark-worker-a-pvclaim.yaml
+kc apply -n rebios-spark -f spark-worker-b-pv.yaml
+kc apply -n rebios-spark -f spark-worker-b-pvclaim.yaml
+
+kc get pv -n rebios-spark
+
+kc get pvc -n rebios-spark
+
+kc -n rebios-spark get services
+
+kc -n rebios-spark delete deployment spark-master
+kc -n rebios-spark delete service spark-master  
+
+ 
+
+
+
+kc -n rebios-spark delete deployment spark-worker-a 
+kc -n rebios-spark delete deployment spark-worker-b 
+
+
+
+kc create -n rebios-spark -f spark-master-deployment.yaml 
+kc create -n rebios-spark -f spark-master-service.yaml 
+
+kc -n rebios-spark get pods
+
+
+#Master
+kc exec -it -n rebios-spark spark-master-79cbb67f95-rhtgm   -- /bin/bash
+10.1.203.21
+
+
+
+kc create -n rebios-spark -f spark-worker-a-deployment.yaml
+kc create -n rebios-spark -f spark-worker-b-deployment.yaml
+
+kc -n rebios-spark get pods
+
+
+unset SPARK_MASTER_PORT
+
+#Worker-a
+kc exec -it -n rebios-spark spark-worker-6bbfb86495-mvnrz   -- /bin/bash
+
+#Worker-b
+kc exec -it -n rebios-spark spark-master-79cbb67f95-rhtgm   -- /bin/bash
+
+
+kc exec -it -n rebios-spark spark-master-5cb7d54cfd-h5tq5  -- /bin/bash
+
+kc exec -it -n rebios-spark spark-worker-596f554dd8-w8zrz  -- /bin/bash
+
+kc exec -it -n rebios-spark spark-worker-7bf487ffc7-5ljnk  -- /bin/bash
+
+unset SPARK_MASTER_PORT
+
+10.1.203.51
+
+sudo docker pull jrosses/rebios-spark:1.0.7
+
+kc -n rebios-spark delete deployment spark-master
+kc -n rebios-spark delete deployment spark-worker 
+
+
+docker build -f Dockerfile -t spark-hadoop:3.5.1 ./docker
+
+kc create -n rebios-spark -f spark-master-deployment.yaml 
+kc -n rebios-spark delete service spark-master
+kc create -n rebios-spark -f spark-master-service.yaml 
+kc create -n rebios-spark -f spark-worker-deployment.yaml
+kc -n rebios-spark get deployments
+kc -n rebios-spark get pods 
+
+
+kc create -n rebios-spark -f dep.yaml 
+
+kc logs -n rebios-spark 
+
+
+
+
+
+
+kc get pv
+kc get pvc -n rebios-spark
+
+kc apply -n rebios-spark -f spark-worker-pv.yaml
+kc apply -n rebios-spark -f spark-worker-pvclaim.yaml
+
+kc get pv
+
+
+
+
+
+kc create -n rebios-spark -f spark-master-deployment.yaml 
+
+
+kc -n rebios-spark get deployments
+
+kc create -n rebios-spark -f spark-master-service.yaml 
+kc -n rebios-spark get services
+
+kc -n rebios-spark get pods 
+
+#Master
+kc exec -it -n rebios-spark spark-master-ff67785f7-kqpf6   -- /bin/bash
+
+#Worker 1
+kc exec -it -n rebios-spark spark-worker-5ff84cf498-k6c4t   -- /bin/bash
+
+#Worker 2
+kc exec -it -n rebios-spark spark-worker-5ff84cf498-r9gsf  -- /bin/bash
+
+10.1.203.5      spark-master-ff67785f7-kqpf6
+10.1.203.5 spark-master
+
+
+
+
+#################################################################
+
+
+sudo docker login --username jrosses --password DtrifNopan@111727
+
+sudo docker  build -f spark.dockerfile -t jrosses/rebios-spark:1.0.7 .
+
+sudo docker push jrosses/rebios-spark:1.0.7
+
+
+sudo docker push jrosses/spark-hadoop:3.5.1
+ 
+
+
+docker rmi jrosses/rebios-spark:1.0.3
+
+kc create -n rebios-spark -f spark-worker-deployment.yaml
+kc -n rebios-spark get deployments 
+
+#List the Services
+kc -n kube-system get services -o wide
+
+kc -n rebios-spark get services -o wide
+
+#################################################################
+sudo docker login --username jrosses --password DtrifNopan@111727
+
+sudo docker build . -t jrosses/spark-proxy:1.0.0
+
+sudo docker push jrosses/spark-proxy:1.0.0
+
+kc get rs -n rebios-spark
+kc delete rs -n rebios-spark
+
+kc create -n rebios-spark -f spark-ui-deployment.yaml 
+kc create -n rebios-spark -f spark-ui-service.yaml 
+
+kc get all -n rebios-spark
+
+kc get all -n kube-public
+kc get all -n default
+kc get all -n kube-node-lease
+kc get all -n kube-system  
+
+
+http://ubuntu@ec2-3-141-23-206.us-east-2.compute.amazonaws.com:31058
+
+
+kc -n rebios-spark get pods 
+
+kc describe pod -n rebios-spark spark-master-6c96f57858-llcxz
+
+
+kubectl get pod -n rebios-spark spark-master-6c96f57858-tz229  --output=yaml
+
+kc logs -n rebios-spark spark-master-c996d6c66-6qr7l
+
+
+
+cd /opt/spark-apps/
+
+spark-submit pyspark_word.py
+
+
+show databases;
+use rebios;
+show tables;
+
+
+
+https://ec2-52-15-253-123.us-east-2.compute.amazonaws.com:10433
+
+
+sudo docker build . -t jrosses/rebios-hue:1.0.1
+
+sudo docker login --username jrosses --password DtrifNopan@111727
+
+sudo docker push jrosses/rebios-hue:1.0.1
+
+kc delete namespace rebios-hue 
+kc delete pv rebios-hue-volume-0
+kc delete pv rebios-hue-volume-1
+kc delete pv rebios-hue-volume-2
+
+kc create namespace rebios-hue 
+
+kc apply -n rebios-hue -f rebios-hue-pv.yaml
+
+kc apply -n rebios-hue -f rebios-hue-pvclaim.yaml
+
+kc get pvc -n rebios-hue 
+
+
+kc -n rebios-hue delete deployment rebios-hue 
+
+kc create -n rebios-hue -f hue-deployment2.yaml
+kc create -n rebios-hue -f hue-service.yaml
+kc create -n rebios-hue -f hue-load-balancer.yaml
+
+kc -n rebios-hue get deployments
+kc get all -n rebios-hue
+kc -n rebios-hue get services -o wide
+kc -n rebios-hue get pods 
+
+kc logs -n rebios-hue rebios-hue-6496dd77b8-7nl2n
+
+kc exec -it -n rebios-hue rebios-hue-6496dd77b8-7nl2n -- /bin/bash 
+
+kc describe pod -n rebios-hue rebios-hue-7f88689dd7-4qw62 
+
+sudo docker exec -it kc logs -n rebios-hue rebios-hue-7bcc6c56d5-nzw5g /bin/bash
+
+kc logs -n rebios-hue rebios-hue-565f4546c-rthg9
+kc exec -it -n rebios-hue rebios-hue -- /bin/bash
+
+kubectl exec -it regular-pod-demo -- sh
+
+
+kubectl exec-as -u root -n rebios-hue rebios-hue  -- /bin/bash
+/usr/share/hue/startup.sh
+
+
+https://ec2-52-15-253-123.us-east-2.compute.amazonaws.com:32604
+
+https://ec2-3-141-23-206.us-east-2.compute.amazonaws.com:30717
+
+
+sudo cp /workspace/environment/hue/overwrite/log.conf /data/hue/conf/
+sudo cp /workspace/environment/hue/overwrite/hue.ini /data/hue/ini/
+
+#Cluster pgadmin port forward  
+kc port-forward -n rebios-hue service/hue  8888:8888 --address 0.0.0.0
+  
+#Create Tunnel for Hue
+ssh -i "reBI0S_key.pem" -L 8888:localhost:8888 ubuntu@ec2-3-141-23-206.us-east-2.compute.amazonaws.com
+
+kc -n rebios-hue get pods
+
+
+
+
+kc -n rebios-hue logs hue-68d85fb4fb-9d5kj
+
+
+
+
+
+
+helm show values gethue/hue
+
+
+kc delete namespace rebios-hue 
+ 
+helm install -n rebios-hue hue gethue/hue 
+
+kc delete namespace rebios-hue 
+kc create namespace rebios-hue
+helm install -n rebios-hue hue gethue/hue  --values ./values.yaml --debug
+
+
+kc exec -it -n rebios-hue hue-dd499cd59-b8wcg   -- /bin/bash
+
+kc exec -it -n rebios-hue hue-dd499cd59-kmg72    -- /bin/bash
+
+kc cp -n rebios-hue /data/hue/conectors/sql_alchemy.py hue-dd499cd59-b8wcg:/usr/share/hue/desktop/libs/notebook/src/notebook/connectors
+
+kc cp -n rebios-hue /data/hue/conectors/sql_alchemy.py hue-dd499cd59-kmg72:/usr/share/hue/desktop/libs/notebook/src/notebook/connectors
+
+
+kc delete namespace rebios-hue 
+kc create namespace rebios-hue
+helm install -n rebios-hue hue gethue/hue --values ./values.yaml --debug
+
+http://ec2-3-141-23-206.us-east-2.compute.amazonaws.com:30427
+
+http://ec2-3-141-23-206.us-east-2.compute.amazonaws.com:8890
+
+kc -n rebios-hue get pods
+
+kc -n rebios-hue get services
+
+ 
+kc logs -n rebios-hue  hue-d8f98d86-lpxx5
+
+
+#################################################################
+#################################################################
+#################################################################
+#################################################################
+#################################################################
+#SUPERSET
+
+helm repo add superset https://apache.github.io/superset
+"superset" has been added to your repositories
+
+kc create namespace rebios-superset  
+
+helm upgrade --install -n rebios-superset superset superset/superset
+
+kc get all -n rebios-superset 
+
+sudo docker login --username jrosses --password DtrifNopan@111727
+
+sudo docker push jrosses/spark-spark-master
+
+sudo docker tag spark-spark-master jrosses/rebios-spark:1.0.0
+
+sudo docker push jrosses/rebios-spark:1.0.0
+
+sudo docker tag  spark-spark-worker-a jrosses/spark-spark-worker-a:1.0.6
+
+sudo docker tag  spark-spark-worker-b jrosses/spark-spark-worker-b:1.0.6
+
+sudo docker push jrosses/spark-spark-master:1.0.6
+sudo docker push jrosses/spark-spark-worker-a:1.0.6
+sudo docker push jrosses/spark-spark-worker-b:1.0.6
+
+ 
+ 
+sudo docker pull jrosses/spark-spark:1.0.7
+sudo docker pull jrosses/spark-spark-worker-a:1.0.6
+
+
+
+hive://https://ec2-52-15-253-123.us-east-2.compute.amazonaws.com:30010/bios
+
+
+
+3.141.23.206
+
+kc port-forward -n rebios-spark service/spark-master 10000:10000 --address 0.0.0.0
+
+
+ssh -i "reBI0S_key.pem" -L 10000:localhost:10000 ubuntu@ec2-3-141-23-206.us-east-2.compute.amazonaws.com
+
+helm repo add apache-airflow https://airflow.apache.org
+helm repo update
+helm search repo airflow
+
+helm show values apache-airflow/airflow
+
+helm install airflow apache-airflow/airflow --namespace rebios-airflow --create-namespace --debug -f values.yaml
+
+NOTES:
+Thank you for installing Apache Airflow 2.9.3!
+
+Your release is named airflow.
+You can now access your dashboard(s) by executing the following command(s) and visiting the corresponding port at localhost in your browser:
+
+Airflow Webserver:     kubectl port-forward svc/airflow-webserver 8080:8080 --namespace rebios-airflow
+Default Webserver (Airflow UI) Login credentials:
+    username: admin
+    password: admin
+Default Postgres connection credentials:
+    username: postgres
+    password: postgres
+    port: 32135
+
+You can get Fernet Key value by running the following:
+
+    echo Fernet Key: $(kubectl get secret --namespace rebios-airflow airflow-fernet-key -o jsonpath="{.data.fernet-key}" | base64 --decode)
+
+###########################################################
+#  WARNING: You should set a static webserver secret key  #
+###########################################################
+
+
+helm install -namespace rebios-spark spark oci://registry-1.docker.io/bitnamicharts/spark
+
+# INPUT
+N=my-namespace
+
+# CALCULATE
+POD=$(kubectl -n $N get pod | tail -1 | awk '{print $1}') 
+# or define static POD, if needed: 
+# POD=my-pod
+CONTAINER=$(kc -n rebios-spark get pod spark-master-0 -o jsonpath="{.status.containerStatuses[].containerID}" | sed 's/.*\/\///')
+
+# RUN SHELL AS ROOT
+sudo runc --root /run/containerd/runc/k8s.io/ exec -t -u 0 $CONTAINER bash
