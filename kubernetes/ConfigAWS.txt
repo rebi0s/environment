@@ -185,11 +185,56 @@ kc -n rebios-superset get pods
 kc apply -n rebios-superset -f service-superset.yaml
 
 kc apply -n rebios-superset -f ingress.yaml
+###################################################
+http://34.228.176.207:30040
+###################################################
+#Configure hue
+kc delete namespace rebios-hue
 
-http://3.91.223.236:80
+kc create namespace rebios-hue
+
+kc apply -n rebios-hue -f cm.yaml
+
+kc apply -n rebios-hue -f hue.yaml
+
+kc apply -n rebios-hue -f service.yaml
+
+kc -n rebios-hue get pods
+
+kc -n rebios-hue get services
+
+http://34.228.176.207:30088
+rebiosadmin - 9t3GuWCf4M3D
+###################################################
+#Configure DataHub
+
+kc delete namespace rebios-datahub
+
+kc create namespace rebios-datahub
+
+kc -n rebios-datahub create secret generic mysql-secrets --from-literal=mysql-root-password=rebios-datahub
+
+kc -n rebios-datahub describe secret mysql-secrets
+ 
+kc -n rebios-datahub create secret generic neo4j-secrets --from-literal=neo4j-password=rebios-datahub
+
+kc -n rebios-datahub describe secret neo4j-secrets
+
+kc -n rebios-datahub create secret generic postgresql-secrets --from-literal=postgres-password=postgres,replication-password=postgres,password=postgres
+
+kc -n rebios-datahub describe secret postgresql-secrets
+
+
+helm repo add datahub https://helm.datahubproject.io/
+
+helm -n rebios-datahub install prerequisites datahub/datahub-prerequisites -f values-prerequisites.yaml
+
+
 
 export user=ue10797
 kc config set-credentials uks-$user --embed-certs --client-certificate ./$user.csr --client-key ./$user.key
 kc config set-cluster uks --embed-certs --certificate-authority kube-ca.crt --server https://177.220.120.104:6443
 kc config set-context uks --cluster uks --user uks-$user --namespace rebios
 kc config use-context uks
+
+kc -n rebios-superset patch svc superset --type='json' -p  '[{"op":"replace","path":"/spec/type","value":"NodePort"},{"op":"replace","path":"/spec/ports/0/nodePort","value":30040}]'

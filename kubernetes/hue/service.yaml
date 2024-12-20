@@ -3,8 +3,10 @@ kind: Service
 metadata:
   name: hue
 spec:
+  type: NodePort
+  ports:
+    - nodePort: 32088
+      port: 8888
+      targetPort: 8888
   selector:
     app: hue
-  ports:
-  - port: 80
-    targetPort: 8888
