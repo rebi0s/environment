@@ -37,3 +37,36 @@ sudo systemctl status docker
 sudo usermod -aG docker ${USER}
 
 
+# Install Microk8s on AWS
+### install the MicroK8s using the following command
+sudo snap install microk8s --classic
+
+### Next, you can check the status of the MicroK8s cluster by running the following command.
+sudo microk8s status
+
+### To avoid using microk8s as a prefix while running kubectl commands, you can add an alias of yuor preference if you don’t have an existing installation of kubectl.
+### In this installation will be used "kc" as alias using the following command;
+alias kc='sudo microk8s kubectl'
+
+### Now, you can execute kubectl commands directly without the prefix.
+kc get nodes
+
+### In case you want to use native kubectl for executing the commands, copy the MicroK8s generated kubeconfig to the ~/.kube/config file by using the following command
+mkdir ~/.kube
+sudo microk8s kubectl config view --raw > ~/.kube/config
+
+### Now, you can use the native kubectl as well to run the commands.
+kc get pods -A
+
+### Add user to microk8s group
+sudo usermod -a -G microk8s ubuntu
+sudo chown -R ubuntu ~/.kube
+
+
+# AWS Architecture
+
+The rebI0S architecture on AWS is comprised of the following components distributed on two EC2 instances. 
+
+![The reBI0S Architecture on AWS](ArchAWS.jpg "The reBI0S Architecture on AWS")
+
+
