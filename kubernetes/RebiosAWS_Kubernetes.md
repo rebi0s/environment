@@ -97,21 +97,22 @@ kc get configmap
 ### Create Volume
 file: pv.yaml
 
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: postgres-volume
-  labels:
-    type: local
-    app: postgres
-spec:
-  storageClassName: manual
-  capacity:
-    storage: 5Gi
-  accessModes:
-    - ReadWriteMany
-  hostPath:
-    path: /data/postgresql
+pv.yaml: |
+	apiVersion: v1
+	kind: PersistentVolume
+	metadata:
+	  name: postgres-volume
+	  labels:
+		type: local
+		app: postgres
+	spec:
+	  storageClassName: manual
+	  capacity:
+		storage: 5Gi
+	  accessModes:
+		- ReadWriteMany
+	  hostPath:
+		path: /data/postgresql
 
 ### Apply Volume
 kc apply -n rebios-postgres -f psql-pv.yaml
