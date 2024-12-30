@@ -97,7 +97,7 @@ kc get configmap
 ### Create Volume
 file: pv.yaml
 
-...yaml
+```
 	apiVersion: v1
 	kind: PersistentVolume
 	metadata:
@@ -113,7 +113,7 @@ file: pv.yaml
 		- ReadWriteMany
 	  hostPath:
 		path: /data/postgresql
-...
+```
 
 ### Apply Volume
 kc apply -n rebios-postgres -f psql-pv.yaml
