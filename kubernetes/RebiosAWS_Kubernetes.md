@@ -1,6 +1,12 @@
 # Configuring Rebios on Kubernetes
 This file describes the steps necessary steps to configure the Rebios on Kubernetes using a EC2 instance
 
+# reBI0S Architecture
+
+The rebI0S architecture is based on the state of the practice in Big Data architectures. 
+
+![The reBI0S Architecture](reBI0SArch.png "The reBI0S Architecture")
+
 # Install Docker on AWS EC2 instance
 
 ## First, update your existing list of packages:
