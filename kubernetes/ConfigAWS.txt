@@ -34,7 +34,7 @@ aws s3 cp  s3://rebios-test-env/rebios-backup/db_iceberg.dump .
 aws s3 cp  s3://rebios-test-env/rebios-backup/db_superset.dump .
 
 
-#Deploy Postgres on Kubernetes
+# Deploy Postgres on Kubernetes
 
 kc delete namespace rebios-postgres 
 
@@ -121,9 +121,93 @@ kc -n rebios-spark get services
 
 kc -n rebios-spark get pods 
 
+kc -n rebios-spark logs spark-master-0
 #Master
 kc exec -it -n rebios-spark spark-master-0   -- /bin/bash
+kc exec -it -n rebios-spark spark-worker-0   -- /bin/bash
+kc exec -it -n rebios-spark spark-worker-1   -- /bin/bash
 
+
+kc exec -it -n spark-master-677447f567-42vjc   -- /bin/bash
+
+
+
+34.228.176.207:30008
+
+
+kc port-forward -n rebios-spark service/spark-master 7890:7890 --address 0.0.0.0
+
+#Create SSH Tunnel
+ssh -i "reBI0S_key_us_east_1.pem" -L 7890:10.152.183.76:7890 ubuntu@34.228.176.207
+
+
+
+8080
+
+./start-worker.sh spark://34.228.176.207:7077
+
+./start-workers.sh spark://34.228.176.207:7077
+
+spark-master-svc   NodePort    10.152.183.20   <none>        7077:30571/TCP,80:30792/TCP,10000:32177/TCP   7m12s
+
+kc -n rebios-spark logs spark-master-677447f567-42vjc
+kc -n rebios-spark logs spark-worker-685cf55bc4-46pwq
+kc -n rebios-spark logs spark-worker-685cf55bc4-g76zj
+
+
+
+Thrift
+34.228.176.207:31629
+
+54.88.111.158:8888
+
+31588
+http://34.228.176.207:31588
+
+http://34.228.176.207:30760
+
+sh sbin/stop-thriftserver.sh
+sh /scripts/start-spark-thrift.sh
+
+sh /scripts/start-spark-sql.sh
+
+echo "$(ps aux)"
+
+NOTES:
+CHART NAME: spark
+CHART VERSION: 9.3.1
+APP VERSION: 3.5.3
+
+Did you know there are enterprise versions of the Bitnami catalog? For enhanced secure software supply chain features, unlimited pulls from Docker, LTS support, or application customization, see Bitnami Premium or Tanzu Application Catalog. See https://www.arrow.com/globalecs/na/vendors/bitnami for more information.
+
+** Please be patient while the chart is being deployed **
+
+1. Get the Spark master WebUI URL by running these commands:
+
+  export HOSTNAME=$(kubectl get ingress --namespace rebios-spark spark-ingress -o jsonpath='{.spec.rules[0].host}')
+  echo "Spark-master URL: http://$HOSTNAME/"
+
+2. Submit an application to the cluster:
+
+  To submit an application to the cluster the spark-submit script must be used. That script can be
+  obtained at https://github.com/apache/spark/tree/master/bin. Also you can use kubectl run.
+
+  Run the commands below to obtain the master IP and submit your application.
+
+  export EXAMPLE_JAR=$(kubectl exec -ti --namespace rebios-spark spark-worker-0 -- find examples/jars/ -name 'spark-example*\.jar' | tr -d '\r')
+  export SUBMIT_PORT=$(kubectl get --namespace rebios-spark -o jsonpath="{.spec.ports[?(@.name=='cluster')].nodePort}" services spark-master-svc)
+  export SUBMIT_IP=$(kubectl get nodes --namespace rebios-spark -o jsonpath="{.items[0].status.addresses[0].address}")
+
+  kubectl run --namespace rebios-spark spark-client --rm --tty -i --restart='Never' \
+    --image docker.io/bitnami/spark:3.5.3-debian-12-r3 \
+    -- spark-submit --master spark://$SUBMIT_IP:$SUBMIT_PORT \
+    --class org.apache.spark.examples.SparkPi \
+    --deploy-mode cluster \
+    $EXAMPLE_JAR 1000
+
+** IMPORTANT: When submit an application the --master parameter should be set to the service IP, if not, the application will not resolve the master. **
+
+http://34.228.176.207:31717
 
 #Configure Superset
 
@@ -138,15 +222,23 @@ kc create namespace rebios-superset
 
 kc -n rebios-superset delete pv superset-volume  
 
+kc -n rebios-superset delete pv redis-volume  
+
 kc -n rebios-superset delete pvc superset-data
 
 kc apply -n rebios-superset -f pv.yaml
+
+kc apply -n rebios-superset -f pv_redis.yaml
 
 kc -n rebios-superset get pv 
 
 kc apply -n rebios-superset -f pvc.yaml
 
+
 kc -n rebios-superset get pvc
+
+kc apply -n rebios-superset -f pvc_redis.yaml
+
 
 kc apply -n rebios-superset -f configmap.yaml
 
@@ -154,7 +246,7 @@ kc apply -n rebios-superset -f scripts.yaml
 
 sudo docker login --username jrosses --password DtrifNopan@111727
 
-sudo docker pull jrosses/rebios-superset:1.0.1
+sudo docker pull jrosses/rebios-superset:1.0.2
 
 kc apply -n rebios-superset -f bash.yaml
 
@@ -163,6 +255,8 @@ kc -n rebios-superset get pods
 kc -n rebios-superset describe pods superset-bash-869dd8fd8d-hrvnc
 
 kc exec -it -n rebios-superset superset-bash-869dd8fd8d-hrvnc   -- /bin/bash
+
+kc -n rebios-superset delete statefulsets superset-redis
 
 kc apply -n rebios-superset -f redis.yaml
 
@@ -186,7 +280,7 @@ kc apply -n rebios-superset -f service-superset.yaml
 
 kc apply -n rebios-superset -f ingress.yaml
 ###################################################
-http://34.228.176.207:30040
+http://34.228.176.207:32378
 ###################################################
 #Configure hue
 kc delete namespace rebios-hue
@@ -203,7 +297,9 @@ kc -n rebios-hue get pods
 
 kc -n rebios-hue get services
 
-http://34.228.176.207:30088
+http://54.88.111.158:32088
+
+http://34.228.176.207:32088
 rebiosadmin - 9t3GuWCf4M3D
 ###################################################
 #Configure DataHub
