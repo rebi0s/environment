@@ -108,47 +108,77 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 	kc create namespace rebios-postgres 
 ```
 
-### Create Config Map
-file: postgres-configmap.yaml
+### Create Passwords
+```
+echo -n 'postgres' | base64
+echo -n 'admin123' | base64
+```
+
+
+### Create Secret
+file: psql-secret.yaml
 
 ```
 	apiVersion: v1
-	kind: ConfigMap
+	kind: Secret
 	metadata:
-	  name: postgres-secret
-	  labels:
-		app: postgres
+	  name: psql-secret
+	type: Opaque
 	data:
-	  POSTGRES_DB: postgres
-	  POSTGRES_USER: postgres
-	  POSTGRES_PASSWORD: postgres
+	  password: cG9zdGdyZXM=
+	  repmgr-password: cG9zdGdyZXM=
+	  admin-password: cG9zdGdyZXM=
 ```
 
 ### Apply Config Map
 ```
-	kc apply -n rebios-postgres -f postgres-configmap.yaml
-	kc get configmap
+	kc apply -n rebios-postgres -f psql-secret.yaml
+	kc get secret 
 ```
 
 ### Create Volume
-file: pv.yaml
+file: psql-pv.yaml
 
 ```
-	apiVersion: v1
-	kind: PersistentVolume
-	metadata:
-	  name: postgres-volume
-	  labels:
-		type: local
-		app: postgres
-	spec:
-	  storageClassName: manual
-	  capacity:
-		storage: 5Gi
-	  accessModes:
-		- ReadWriteMany
-	  hostPath:
-		path: /data/postgresql
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-volume-0
+  # name: rebios-postgresql-0
+  labels:
+    app: postgres-app
+spec:
+  storageClassName: psql-manual
+  claimRef:
+    name: rebios-postgresql-0
+    namespace: rebios-postgres
+  capacity:
+    storage: 8Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /data/postgres/postgres0
+
+---
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-volume-1
+  # name: rebios-postgresql-1
+  labels:
+    app: postgres-app
+spec:
+  storageClassName: psql-manual
+  claimRef:
+    name: rebios-postgresql-1
+    namespace: rebios-postgres
+  capacity:
+    storage: 8Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /data/postgres/postgres1
 ```
 
 ### Apply Volume
@@ -158,107 +188,192 @@ file: pv.yaml
 ```
 
 ### Create Volume Claim
-file: psql-claim.yaml
+file: psql-pvclaim.yaml
 
 ```
 	apiVersion: v1
-	kind: PersistentVolumeClaim
-	metadata:
-	  name: postgres-volume-claim
-	  labels:
-		app: postgres
-	spec:
-	  storageClassName: manual
-	  volumeName: postgres-volume
-	  accessModes:
-		- ReadWriteMany
-	  resources:
-		requests:
-		  storage: 5Gi
+kind: PersistentVolumeClaim
+metadata:
+  name: rebios-postgresql-0
+  labels:
+    app: postgres-app
+spec:
+  storageClassName: psql-manual
+  volumeName: postgres-volume-0
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 8Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rebios-postgresql-1
+  labels:
+    app: postgres-app
+spec:
+  storageClassName: psql-manual
+  volumeName: postgres-volume-1
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 8Gi
 ```
 
 ### Apply Volume Claim
 ```
-	kc apply -n rebios-postgres -f psql-claim.yaml
+	kc apply -n rebios-postgres -f psql-pvclaim.yaml
 	kc -n rebios-postgres get pvc
 ```
 
-### Create Deployment
-file: ps-deployment.yaml
+### Create Config
+file: config.yaml
 
+```
+	service:
+	  type: LoadBalancer
+	  ports:
+		postgresql: 5433
+		nodePort: 30028
+```
+
+### Install Postgres
+```
+  helm upgrade --cleanup-on-fail \
+  --namespace rebios-postgres \
+  --install rebios-postgres oci://registry-1.docker.io/bitnamicharts/postgresql-ha \
+  --values config.yaml
+```
+
+### Install Output
+```
+Pulled: registry-1.docker.io/bitnamicharts/postgresql-ha:15.1.4
+Digest: sha256:541dc2193dbfd6af5af7b614c5882e30aef54072539197cbc20f6951ff667334
+NAME: rebios-postgres
+LAST DEPLOYED: Wed Jan  1 12:22:09 2025
+NAMESPACE: rebios-postgres
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+NOTES:
+CHART NAME: postgresql-ha
+CHART VERSION: 15.1.4
+APP VERSION: 17.2.0
+
+Did you know there are enterprise versions of the Bitnami catalog? For enhanced secure software supply chain features, unlimited pulls from Docker, LTS support, or application customization, see Bitnami Premium or Tanzu Application Catalog. See https://www.arrow.com/globalecs/na/vendors/bitnami for more information.
+** Please be patient while the chart is being deployed **
+PostgreSQL can be accessed through Pgpool via port 5432 on the following DNS name from within your cluster:
+
+    rebios-postgres-postgresql-ha-pgpool.rebios-postgres.svc.cluster.local
+
+Pgpool acts as a load balancer for PostgreSQL and forward read/write connections to the primary node while read-only connections are forwarded to standby nodes.
+
+To get the password for "postgres" run:
+
+    export POSTGRES_PASSWORD=$(kubectl get secret --namespace rebios-postgres rebios-postgres-postgresql-ha-postgresql -o jsonpath="{.data.password}" | base64 -d)
+
+To get the password for "repmgr" run:
+
+    export REPMGR_PASSWORD=$(kubectl get secret --namespace rebios-postgres rebios-postgres-postgresql-ha-postgresql -o jsonpath="{.data.repmgr-password}" | base64 -d)
+
+To connect to your database run the following command:
+
+    kubectl run rebios-postgres-postgresql-ha-client --rm --tty -i --restart='Never' --namespace rebios-postgres --image docker.io/bitnami/postgresql-repmgr:17.2.0-debian-12-r6 --env="PGPASSWORD=$POSTGRES_PASSWORD"  \
+        --command -- psql -h rebios-postgres-postgresql-ha-pgpool -p 5432 -U postgres -d postgres
+
+To connect to your database from outside the cluster execute the following commands:
+
+    kubectl port-forward --namespace rebios-postgres svc/rebios-postgres-postgresql-ha-pgpool 5432:5432 &
+    psql -h 127.0.0.1 -p 5432 -U postgres -d postgres
+
+WARNING: There are "resources" sections in the chart not set. Using "resourcesPreset" is not recommended for production. For production installations, please set the following values according to your workload needs:
+  - pgpool.resources
+  - postgresql.resources
+  - witness.resources
++info https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+
+```
+
+
+
+### Check Postgres pods
+```
+	kc get pods -n rebios-postgres
+```
+### Pods Output
+```
+rebios-postgres-postgresql-ha-pgpool-6c8f56fbbf-npkx8   0/1     Running   1 (14s ago)   95s
+rebios-postgres-postgresql-ha-postgresql-0              0/1     Pending   0             95s
+rebios-postgres-postgresql-ha-postgresql-1              0/1     Pending   0             95s
+```
+
+# Create PgAdmin
+file: pgadmin-secret.yaml
+
+```
+	apiVersion: v1
+	kind: Secret
+	metadata:
+	  name: pgadmin-secret
+	type: Opaque
+	data:
+	  pgadmin-default-password: YWRtaW4xMjM=``` 
+
+### Apply Secret
+```
+	kc apply -n rebios-postgres -f pgadmin-secret.yaml
+	kc  -n rebios-postgres get secrets
+```
+
+
+### Create Depolyment
+file: pgadmin-deployment.yaml
 ```
 	apiVersion: apps/v1
 	kind: Deployment
 	metadata:
-	  name: postgres
+	  name: pgadmin
 	spec:
-	  replicas: 1
 	  selector:
-		matchLabels:
-		  app: postgres
+	   matchLabels:
+		app: pgadmin
+	  replicas: 1
 	  template:
 		metadata:
 		  labels:
-			app: postgres
+			app: pgadmin
 		spec:
 		  containers:
-			- name: postgres
-			  image: 'postgres:15'
-			  imagePullPolicy: IfNotPresent
+			- name: pgadmin4
+			  image: dpage/pgadmin4
+			  env:
+				- name: PGADMIN_DEFAULT_EMAIL
+				  value: "admin@admin.com"
+				- name: PGADMIN_DEFAULT_PASSWORD
+				  valueFrom:
+					secretKeyRef:
+					  name: pgadmin-secret
+					  key: pgadmin-default-password
+				- name: PGADMIN_PORT
+				  value: "80"
 			  ports:
-				- containerPort: 5432
-			  envFrom:
-				- configMapRef:
-					name: postgres-secret
-			  volumeMounts:
-				- mountPath: /var/lib/postgresql/data
-				  name: postgresdata
-		  volumes:
-			- name: postgresdata
-			  persistentVolumeClaim:
-				claimName: postgres-volume-claim
+				- containerPort: 80
+				  name: pgadminport
 ```
 
 ### Apply Deployment
 ```
-	kc apply -n rebios-postgres -f ps-deployment.yaml
-	kc -n rebios-postgres get deployments
+	kc apply -n rebios-postgres -f pgadmin-deployment.yaml
+	kc  -n rebios-postgres get deployment
 ```
 
-# Check Postgres pods
-```
-	kc get pods -n rebios-postgres
-```
-
-
-### Create Service
-file: ps-service.yaml
-
-```
-	apiVersion: v1
-	kind: Service
-	metadata:
-	  name: postgres
-	  labels:
-		app: postgres
-	spec:
-	  type: NodePort
-	  ports:
-		- port: 5432
-	  selector:
-		app: postgres
-``` 
-
-### Apply Service
-```
-	kc apply -n rebios-postgres -f ps-service.yaml
-	kc get svc -n rebios-postgres
-```
 
 ### Connect to POD
 ```
 	kc get pods -n rebios-postgres
-	kc exec -n rebios-postgres -it postgres-XXXXXXXXX -- /bin/bash
+	kc exec -it -n rebios-postgres rebios-postgres-postgresql-ha-postgresql-0 -- /bin/bash
 ```
 
 ### Connect to Postgres
@@ -338,7 +453,7 @@ file: spark-pv.yaml
 ```
 
 ### Create master volume claim
-file: spark-pvm.yaml
+file: spark-pvc.yaml
 
 ```
 	apiVersion: v1
@@ -359,7 +474,7 @@ file: spark-pvm.yaml
 
 ### Apply master volume claim
 ```
-	kc apply -n rebios-spark -f spark-pvm.yaml
+	kc apply -n rebios-spark -f spark-pvc.yaml
 	kc -n rebios-spark get pvc
 ```
 
@@ -631,9 +746,4 @@ file: spark-worker-service.yaml
 		component: spark-worker
 ```
 
-### Apply spark worker service
-```
-	kc create -n rebios-spark -f spark-worker-service.yaml 
-    kc -n rebios-spark get services
-```
 
