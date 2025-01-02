@@ -319,7 +319,8 @@ file: pgadmin-secret.yaml
 	  name: pgadmin-secret
 	type: Opaque
 	data:
-	  pgadmin-default-password: YWRtaW4xMjM=``` 
+	  pgadmin-default-password: YWRtaW4xMjM=
+``` 
 
 ### Apply Secret
 ```
