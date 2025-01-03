@@ -3929,3 +3929,137 @@ prerequisites-zookeeper-0                        1/1     Running     0          
 	pass: datahub
 ```
 ![The Welcome Datahub](datahub.jpg "The Welcome Datahub")
+
+# Install Superset
+
+### Create Namespace
+```
+	kc create namespace rebios-superset
+```
+
+### Create the volumes 
+file: pv.yaml
+```
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: superset-volume
+  labels:
+    type: local
+    app: rebios-superset
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /data/superset
+```
+
+file: pv-redis.yaml
+```
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: redis-volume
+  labels:
+    type: local
+    app: rebios-superset
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /data/redis
+```
+
+### Apply the Volumes
+```
+	kc apply -n rebios-superset -f pv.yaml
+	kc apply -n rebios-superset -f pv-redis.yaml
+	kc -n rebios-superset get pv
+```
+
+### Create the volume claims 
+file: pvc.yaml
+```
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: superset-data
+spec:
+  storageClassName: manual
+  volumeName: superset-volume
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+```
+
+file: pvc-redis.yaml
+```
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+spec:
+  storageClassName: manual
+  volumeName: redis-volume
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+```
+
+### Apply the Volume Claims
+```
+	kc apply -n rebios-superset -f pvc.yaml
+	kc apply -n rebios-superset -f pvc-redis.yaml
+	kc -n rebios-superset get pvc
+```
+
+
+kc apply -n rebios-superset -f configmap.yaml
+
+kc apply -n rebios-superset -f scripts.yaml
+
+sudo docker login --username jrosses --password DtrifNopan@111727
+
+sudo docker pull jrosses/rebios-superset:1.0.2
+
+kc apply -n rebios-superset -f bash.yaml
+
+kc -n rebios-superset get pods
+
+kc -n rebios-superset describe pods superset-bash-869dd8fd8d-hrvnc
+
+kc exec -it -n rebios-superset superset-bash-869dd8fd8d-hrvnc   -- /bin/bash
+
+kc -n rebios-superset delete statefulsets superset-redis
+
+kc apply -n rebios-superset -f redis.yaml
+
+kc -n rebios-superset get pods
+
+kc apply -n rebios-superset -f service-redis.yaml
+
+kc apply -n rebios-superset -f superset-beat.yaml
+
+kc -n rebios-superset get pods
+
+kc apply -n rebios-superset -f superset-worker.yaml
+
+kc -n rebios-superset get pods
+
+kc apply -n rebios-superset -f superset.yaml
+
+kc -n rebios-superset get pods
+
+kc apply -n rebios-superset -f service-superset.yaml
+
+kc apply -n rebios-superset -f ingress.yaml
