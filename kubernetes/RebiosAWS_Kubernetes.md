@@ -612,7 +612,7 @@ file: spark-master-service.yaml
 
 ### Apply spark master service
 ```
-	kc create -n rebios-spark -f spark-master-service.yaml 
+    kc create -n rebios-spark -f spark-master-service.yaml 
     kc -n rebios-spark get services
 ```
 
@@ -3904,10 +3904,28 @@ helm install datahub datahub/datahub -n rebios-datahub
 
 kc -n rebios-datahub get pods 
 
-NAME                           READY   STATUS    RESTARTS   AGE
-elasticsearch-master-0         1/1     Running   0          94s
-prerequisites-kafka-broker-0   1/1     Running   0          94s
-prerequisites-neo4j-0          1/1     Running   0          94s
-prerequisites-zookeeper-0      1/1     Running   0          94s
+NAME                                             READY   STATUS      RESTARTS   AGE
+datahub-acryl-datahub-actions-6d7dc8b789-w9f6g   1/1     Running     0          28m
+datahub-datahub-frontend-54fbc97fb-4zzsk         1/1     Running     0          28m
+datahub-datahub-gms-6cf6cf44d7-zhlkl             1/1     Running     0          28m
+datahub-elasticsearch-setup-job-txsln            0/1     Completed   0          35m
+datahub-kafka-setup-job-l9jwf                    0/1     Completed   0          35m
+datahub-mysql-setup-job-whzq5                    0/1     Completed   0          32m
+datahub-nocode-migration-job-nhkm8               0/1     Completed   0          28m
+datahub-system-update-hbgzd                      0/1     Completed   0          31m
+datahub-system-update-nonblk-xprps               0/1     Completed   0          25m
+elasticsearch-master-0                           1/1     Running     0          38m
+prerequisites-kafka-broker-0                     1/1     Running     0          38m
+prerequisites-mysql-0                            1/1     Running     0          38m
+prerequisites-zookeeper-0                        1/1     Running     0          38m
 
 ```
+
+
+# Acess Datahub frontend 
+```
+	http://34.228.176.207:30349
+	user: datahub
+	pass: datahub
+```
+![The Welcome Datahub](datahub.jpg "The Welcome Datahub")
