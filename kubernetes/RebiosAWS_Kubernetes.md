@@ -482,7 +482,7 @@ file: spark-pvc.yaml
 ### Create the master configmap
 file: spark-master-configmap.yaml
 
-    
+```
 	apiVersion: v1
 	kind: ConfigMap
 	metadata:
