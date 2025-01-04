@@ -1489,7 +1489,7 @@ superset-worker-84bf5fb848-dsfs7   1/1     Running   0          5d5h
 	pass: R4WCrL04cvA8
 ```
 
-![The Superset Frontend](superset.png "The Superset Frontend")
+![The Superset Frontend](superset.jpg "The Superset Frontend")
 
 
 # Install Airflow
@@ -1526,7 +1526,7 @@ airflow-worker-0                     2/2     Running   0          144m
 	pass: airflow
 ```
 
-![The Airflow Frontend](airflow.png "The Airflow Frontend")
+![The Airflow Frontend](airflow.jpg "The Airflow Frontend")
 
 
 # Install HUE
@@ -4642,5 +4642,5 @@ file: service.yaml
 	pass: 9t3GuWCf4M3D
 ```
 
-![The HUE Frontend](hue.png "The HUE Frontend")
+![The HUE Frontend](hue.jpg "The HUE Frontend")
 
