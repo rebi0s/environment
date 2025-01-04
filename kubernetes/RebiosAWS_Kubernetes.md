@@ -4613,7 +4613,6 @@ file: hue.yaml
 ### Create the Service
 file: service.yaml
 
-```
 <code><span style="color:red">
 	apiVersion: v1
 	kind: Service
@@ -4628,7 +4627,7 @@ file: service.yaml
 	  selector:
 		app: hue
 </span></code>
-```
+
 
 ### Apply the service
 ```
