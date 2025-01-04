@@ -4635,9 +4635,9 @@ file: service.yaml
 
 # Acess HUE 
 ```
-	http://54.88.111.158:32088
-	user: rebiosadmin
-	pass: 9t3GuWCf4M3D
+	<code> <i>http://54.88.111.158:32088</i> 
+	user: <code> <b>rebiosadmin</b>
+	pass: <code> <b>9t3GuWCf4M3D</b>
 ```
 
 ![The HUE Frontend](hue.jpg "The HUE Frontend")
