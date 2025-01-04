@@ -754,6 +754,781 @@ file: spark-worker-service.yaml
 	kc -n rebios-spark get pods
 ```
 
+
+# Install Datahub
+
+### Create namespace
+```
+	kc create namespace rebios-datahub
+```
+
+### Create secrets
+```
+kc create secret generic mysql-secrets --from-literal=mysql-root-password=datahub -n rebios-datahub
+kc create secret generic neo4j-secrets --from-literal=neo4j-password=datahub  -n rebios-datahub
+```
+### Create secrets
+```
+helm install -n rebios-datahub prerequisites datahub/datahub-prerequisites --values values-prerequisites.yaml
+```
+
+### Check Prerequisits 
+```
+kc -n rebios-datahub get pods 
+
+NAME                           READY   STATUS    RESTARTS   AGE
+elasticsearch-master-0         1/1     Running   0          94s
+prerequisites-kafka-broker-0   1/1     Running   0          94s
+prerequisites-neo4j-0          1/1     Running   0          94s
+prerequisites-zookeeper-0      1/1     Running   0          94s
+
+```
+
+### Install Datahub 
+```
+
+helm install datahub datahub/datahub -n rebios-datahub
+
+
+kc -n rebios-datahub get pods 
+
+NAME                                             READY   STATUS      RESTARTS   AGE
+datahub-acryl-datahub-actions-6d7dc8b789-w9f6g   1/1     Running     0          28m
+datahub-datahub-frontend-54fbc97fb-4zzsk         1/1     Running     0          28m
+datahub-datahub-gms-6cf6cf44d7-zhlkl             1/1     Running     0          28m
+datahub-elasticsearch-setup-job-txsln            0/1     Completed   0          35m
+datahub-kafka-setup-job-l9jwf                    0/1     Completed   0          35m
+datahub-mysql-setup-job-whzq5                    0/1     Completed   0          32m
+datahub-nocode-migration-job-nhkm8               0/1     Completed   0          28m
+datahub-system-update-hbgzd                      0/1     Completed   0          31m
+datahub-system-update-nonblk-xprps               0/1     Completed   0          25m
+elasticsearch-master-0                           1/1     Running     0          38m
+prerequisites-kafka-broker-0                     1/1     Running     0          38m
+prerequisites-mysql-0                            1/1     Running     0          38m
+prerequisites-zookeeper-0                        1/1     Running     0          38m
+
+```
+
+
+# Acess Datahub frontend 
+```
+	http://34.228.176.207:30349
+	user: datahub
+	pass: datahub
+```
+![The Welcome Datahub](datahub.jpg "The Welcome Datahub")
+
+# Install Superset
+
+### Create Namespace
+```
+	kc create namespace rebios-superset
+```
+
+### Create the volumes 
+file: pv.yaml
+```
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: superset-volume
+  labels:
+    type: local
+    app: rebios-superset
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /data/superset
+```
+
+file: pv-redis.yaml
+```
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: redis-volume
+  labels:
+    type: local
+    app: rebios-superset
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /data/redis
+```
+
+### Apply the Volumes
+```
+	kc apply -n rebios-superset -f pv.yaml
+	kc apply -n rebios-superset -f pv-redis.yaml
+	kc -n rebios-superset get pv
+```
+
+### Create the volume claims 
+file: pvc.yaml
+```
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: superset-data
+spec:
+  storageClassName: manual
+  volumeName: superset-volume
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+```
+
+file: pvc-redis.yaml
+```
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+spec:
+  storageClassName: manual
+  volumeName: redis-volume
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+```
+
+### Apply the Volume Claims
+```
+	kc apply -n rebios-superset -f pvc.yaml
+	kc apply -n rebios-superset -f pvc-redis.yaml
+	kc -n rebios-superset get pvc
+```
+
+### Create the volume claims 
+file: configmap.yaml
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: superset-config
+data:
+  COMPOSE_PROJECT_NAME: superset
+  # database configurations (do not modify)
+  DATABASE_DB: superset
+  DATABASE_HOST: db
+  # Make sure you set this to a unique secure random value on production
+  DATABASE_PASSWORD: superset
+  DATABASE_USER: superset
+  EXAMPLES_DB: examples
+  EXAMPLES_HOST: db
+  EXAMPLES_USER: examples
+  # Make sure you set this to a unique secure random value on production
+  EXAMPLES_PASSWORD: examples
+  EXAMPLES_PORT: "5432"
+  # database engine specific environment variables
+  # change the below if you prefer another database engine
+  DATABASE_PORT: "5432"
+  DATABASE_DIALECT: postgresql
+  POSTGRES_DB: superset
+  POSTGRES_USER: superset
+  # Make sure you set this to a unique secure random value on production
+  POSTGRES_PASSWORD: superset
+  #MYSQL_DATABASE: superset
+  #MYSQL_USER: superset
+  #MYSQL_PASSWORD: superset
+  #MYSQL_RANDOM_ROOT_PASSWORD: yes
+  # Add the mapped in /app/pythonpath_docker which allows devs to override stuff
+  PYTHONPATH: /app/pythonpath:/app/docker/pythonpath_dev
+  REDIS_HOST: superset-redis
+  REDIS_PORT: "6379"
+  FLASK_DEBUG: "true"
+  SUPERSET_ENV: development
+  SUPERSET_LOAD_EXAMPLES: "no"
+  CYPRESS_CONFIG: "false"
+  SUPERSET_PORT: "8088"
+  MAPBOX_API_KEY: ''
+  # Make sure you set this to a unique secure random value on production
+  SUPERSET_SECRET_KEY: _97DXqpa1*g?5Uoi
+  ENABLE_PLAYWRIGHT: "false"
+  PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
+  BUILD_SUPERSET_FRONTEND_IN_DOCKER: "true"
+  SUPERSET_HOME: /app/superset_home
+```
+
+### Apply the Confimap
+```
+	kc apply -n rebios-superset -f configmap.yaml
+	kc -n rebios-superset get configmaps
+```
+
+### Create the Scripts
+file: scripts.yaml
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: superset-scripts
+data:
+  docker-bootstrap.sh: |
+    #!/usr/bin/env bash
+    #
+    # Licensed to the Apache Software Foundation (ASF) under one or more
+    # contributor license agreements.  See the NOTICE file distributed with
+    # this work for additional information regarding copyright ownership.
+    # The ASF licenses this file to You under the Apache License, Version 2.0
+    # (the "License"); you may not use this file except in compliance with
+    # the License.  You may obtain a copy of the License at
+    #
+    #    http://www.apache.org/licenses/LICENSE-2.0
+    #
+    # Unless required by applicable law or agreed to in writing, software
+    # distributed under the License is distributed on an "AS IS" BASIS,
+    # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    # See the License for the specific language governing permissions and
+    # limitations under the License.
+    #
+
+    set -eo pipefail
+
+    REQUIREMENTS_LOCAL="/app/docker/requirements-local.txt"
+    # If Cypress run – overwrite the password for admin and export env variables
+    if [ "$CYPRESS_CONFIG" == "true" ]; then
+        export SUPERSET_CONFIG=tests.integration_tests.superset_test_config
+        export SUPERSET_TESTENV=true
+        export SUPERSET__SQLALCHEMY_DATABASE_URI=postgresql+psycopg2://superset:superset@db:5432/superset
+    fi
+    #
+    # Make sure we have dev requirements installed
+    #
+    if [ -f "${REQUIREMENTS_LOCAL}" ]; then
+      echo "Installing local overrides at ${REQUIREMENTS_LOCAL}"
+      pip install --no-cache-dir -r "${REQUIREMENTS_LOCAL}"
+    else
+      echo "Skipping local overrides"
+    fi
+
+    case "${1}" in
+      worker)
+        echo "Starting Celery worker..."
+        # setting up only 2 workers by default to contain memory usage in dev environments
+        celery --app=superset.tasks.celery_app:app worker -O fair -l INFO --concurrency=${CELERYD_CONCURRENCY:-2}
+        ;;
+      beat)
+        echo "Starting Celery beat..."
+        rm -f /tmp/celerybeat.pid
+        celery --app=superset.tasks.celery_app:app beat --pidfile /tmp/celerybeat.pid -l INFO -s "${SUPERSET_HOME}"/celerybeat-schedule
+        ;;
+      app)
+        echo "Starting web app (using development server)..."
+        flask run -p 8088 --with-threads --reload --debugger --host=0.0.0.0
+        ;;
+      app-gunicorn)
+        echo "Starting web app..."
+        /usr/bin/run-server.sh
+        ;;
+      *)
+        echo "Unknown Operation!!!"
+        ;;
+    esac
+
+  docker-init.sh: |
+    #!/usr/bin/env bash
+    #
+    # Licensed to the Apache Software Foundation (ASF) under one or more
+    # contributor license agreements.  See the NOTICE file distributed with
+    # this work for additional information regarding copyright ownership.
+    # The ASF licenses this file to You under the Apache License, Version 2.0
+    # (the "License"); you may not use this file except in compliance with
+    # the License.  You may obtain a copy of the License at
+    #
+    #    http://www.apache.org/licenses/LICENSE-2.0
+    #
+    # Unless required by applicable law or agreed to in writing, software
+    # distributed under the License is distributed on an "AS IS" BASIS,
+    # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    # See the License for the specific language governing permissions and
+    # limitations under the License.
+    #
+    set -e
+
+    #
+    # Always install local overrides first
+    #
+    /app/docker/docker-bootstrap.sh
+
+    STEP_CNT=4
+
+    echo_step() {
+    cat <<EOF
+
+    ######################################################################
+
+
+    Init Step ${1}/${STEP_CNT} [${2}] -- ${3}
+
+
+    ######################################################################
+
+    EOF
+    }
+    ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
+    # If Cypress run – overwrite the password for admin and export env variables
+    if [ "$CYPRESS_CONFIG" == "true" ]; then
+        ADMIN_PASSWORD="general"
+        export SUPERSET_CONFIG=tests.integration_tests.superset_test_config
+        export SUPERSET_TESTENV=true
+        export SUPERSET__SQLALCHEMY_DATABASE_URI=postgresql+psycopg2://superset:superset@db:5432/superset
+    fi
+    # Initialize the database
+    echo_step "1" "Starting" "Applying DB migrations"
+    superset db upgrade
+    echo_step "1" "Complete" "Applying DB migrations"
+
+    # Create an admin user
+    echo_step "2" "Starting" "Setting up admin user ( admin / $ADMIN_PASSWORD )"
+    superset fab create-admin \
+                  --username admin \
+                  --firstname Superset \
+                  --lastname Admin \
+                  --email admin@superset.com \
+                  --password "$ADMIN_PASSWORD"
+    echo_step "2" "Complete" "Setting up admin user"
+    # Create default roles and permissions
+    echo_step "3" "Starting" "Setting up roles and perms"
+    superset init
+    echo_step "3" "Complete" "Setting up roles and perms"
+
+    if [ "$SUPERSET_LOAD_EXAMPLES" = "yes" ]; then
+        # Load some data to play with
+        echo_step "4" "Starting" "Loading examples"
+        # If Cypress run which consumes superset_test_config – load required data for tests
+        if [ "$CYPRESS_CONFIG" == "true" ]; then
+            superset load_test_users
+            superset load_examples --load-test-data
+        else
+            superset load_examples --force
+        fi
+        echo_step "4" "Complete" "Loading examples"
+    fi
+
+  docker-frontend.sh: |
+    #!/usr/bin/env bash
+    #
+    # Licensed to the Apache Software Foundation (ASF) under one or more
+    # contributor license agreements.  See the NOTICE file distributed with
+    # this work for additional information regarding copyright ownership.
+    # The ASF licenses this file to You under the Apache License, Version 2.0
+    # (the "License"); you may not use this file except in compliance with
+    # the License.  You may obtain a copy of the License at
+    #
+    #    http://www.apache.org/licenses/LICENSE-2.0
+    #
+    # Unless required by applicable law or agreed to in writing, software
+    # distributed under the License is distributed on an "AS IS" BASIS,
+    # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    # See the License for the specific language governing permissions and
+    # limitations under the License.
+    #
+    set -e
+
+    # Packages needed for puppeteer:
+    if [ "$PUPPETEER_SKIP_CHROMIUM_DOWNLOAD" = "false" ]; then
+        apt update
+        apt install -y chromium
+    fi
+
+    if [ "$BUILD_SUPERSET_FRONTEND_IN_DOCKER" = "true" ]; then
+        echo "Building Superset frontend in dev mode inside docker container"
+        cd /app/superset-frontend
+
+        echo "Running `npm install`"
+        npm install
+
+        echo "Running frontend"
+        npm run dev
+
+    else
+        echo "Skipping frontend build steps - YOU NEED TO RUN IT MANUALLY ON THE HOST!"
+        echo "https://superset.apache.org/docs/contributing/development/#webpack-dev-server"
+    fi
+
+```
+
+### Apply the Scripts
+```
+	kc apply -n rebios-superset -f scripts.yaml
+```
+
+### Create the Bash
+file: bash.yaml
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset-bash
+spec:
+  selector:
+    matchLabels:
+      app: superset-bash
+  template:
+    metadata:
+      labels:
+        app: superset-bash
+    spec:
+      containers:
+      - name: superset-bash
+        image: jrosses/rebios-superset:1.0.2
+        command: ["sleep", "infinity"]
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        envFrom:
+        - configMapRef:
+            name: superset-config
+        volumeMounts:
+        - name: superset-data
+          mountPath: /app/superset_home
+        - name: superset-scripts
+          mountPath: /app/scripts
+        securityContext:
+          runAsUser: 0
+      volumes:
+      - name: superset-data
+        persistentVolumeClaim:
+          claimName: superset-data
+      - name: superset-scripts
+        configMap:
+          name: superset-scripts
+```
+### Apply the Bash
+
+```
+kc apply -n rebios-superset -f bash.yaml
+```
+
+### Create the Redis
+file: redis.yaml
+```
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: superset-redis
+spec:
+  selector:
+    matchLabels:
+      app: superset-redis
+  serviceName: superset-redis
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: superset-redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7
+        ports:
+        - containerPort: 6379
+          name: redis
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: redis-data
+
+```
+
+### Apply the Redis
+
+```
+kc apply -n rebios-superset -f redis.yaml
+```
+
+### Create the Service Redis
+file: service-redis.yaml
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: superset-redis
+spec:
+  selector:
+    app: superset-redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+
+```
+
+### Apply the Redis
+
+```
+kc apply -n rebios-superset -f service-redis.yaml
+```
+
+
+### Create the Beat
+file: superset-beat.yaml
+```
+apiVersion: v1
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset-beat
+spec:
+  selector:
+    matchLabels:
+      app: superset-beat
+  template:
+    metadata:
+      labels:
+        app: superset-beat
+    spec:
+      containers:
+      - name: superset-beat
+        image: jrosses/rebios-superset:1.0.2
+        command:
+        - /bin/bash
+        - -ec
+        - |
+          mkdir -p /app/docker
+          cp -rL /app/docker-scripts/* /app/docker/
+          chmod +x /app/docker/*.sh
+          /app/docker/docker-bootstrap.sh beat
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        envFrom:
+        - configMapRef:
+            name: superset-config
+        volumeMounts:
+        - name: superset-data
+          mountPath: /app/superset_home
+        - name: superset-scripts
+          mountPath: /app/docker-scripts
+        securityContext:
+          runAsUser: 0
+      volumes:
+      - name: superset-data
+        persistentVolumeClaim:
+          claimName: superset-data
+      - name: superset-scripts
+        configMap:
+          name: superset-scripts
+```
+
+### Apply the Beat
+
+```
+kc apply -n rebios-superset -f superset-beat.yaml
+```
+
+### Create the Beat
+file: superset-worker.yaml
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset-worker
+spec:
+  selector:
+    matchLabels:
+      app: superset-worker
+  template:
+    metadata:
+      labels:
+        app: superset-worker
+    spec:
+      containers:
+      - name: superset-worker
+        image: jrosses/rebios-superset:1.0.2
+        command:
+        - /bin/bash
+        - -ec
+        - |
+          mkdir -p /app/docker
+          cp -rL /app/docker-scripts/* /app/docker/
+          chmod +x /app/docker/*.sh
+          /app/docker/docker-bootstrap.sh worker
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "500m"
+        envFrom:
+        - configMapRef:
+            name: superset-config
+        volumeMounts:
+        - name: superset-data
+          mountPath: /app/superset_home
+        - name: superset-scripts
+          mountPath: /app/docker-scripts
+        securityContext:
+          runAsUser: 0
+      volumes:
+      - name: superset-data
+        persistentVolumeClaim:
+          claimName: superset-data
+      - name: superset-scripts
+        configMap:
+          name: superset-scripts
+```
+### Apply the Beat
+
+```
+kc apply -n rebios-superset -f superset-worker.yaml
+```
+
+### Create the Superset
+file: superset.yaml
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset
+spec:
+  selector:
+    matchLabels:
+      app: superset
+  template:
+    metadata:
+      labels:
+        app: superset
+    spec:
+      containers:
+      - name: superset
+        image: jrosses/rebios-superset:1.0.2
+        command:
+        - /bin/bash
+        - -ec
+        - |
+          mkdir -p /app/docker
+          cp -rL /app/docker-scripts/* /app/docker/
+          chmod +x /app/docker/*.sh
+          /app/docker/docker-bootstrap.sh app-gunicorn
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "500m"
+        ports:
+        - containerPort: 8088
+        envFrom:
+        - configMapRef:
+            name: superset-config
+        volumeMounts:
+        - name: superset-data
+          mountPath: /app/superset_home
+        - name: superset-scripts
+          mountPath: /app/docker-scripts
+        securityContext:
+          runAsUser: 0
+      volumes:
+      - name: superset-data
+        persistentVolumeClaim:
+          claimName: superset-data
+      - name: superset-scripts
+        configMap:
+          name: superset-scripts
+```
+
+### Apply the Superset 
+
+```
+kc apply -n rebios-superset -f superset.yaml
+kc -n rebios-superset get pods
+
+```
+### Create the Service Superset
+file: service-superset.yaml
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: superset
+spec:
+  type: NodePort
+  selector:
+    app: superset
+  ports:
+  - port: 8088
+    targetPort: 8088
+```
+### Apply the Superset 
+
+```
+kc apply -n rebios-superset -f service-superset.yaml
+
+```
+
+### Check Superset Pods
+
+```
+kc -n rebios-superset get pods
+NAME                               READY   STATUS    RESTARTS   AGE
+superset-7db76db494-6pwj2          1/1     Running   0          5d5h
+superset-bash-55866bf6b9-8mtrz     1/1     Running   0          5d6h
+superset-beat-ff5c8bcd8-r7x4p      1/1     Running   0          5d6h
+superset-redis-0                   1/1     Running   0          144m
+superset-worker-84bf5fb848-dsfs7   1/1     Running   0          5d5h
+```
+
+### Access the Superset Frontend
+```
+	http://54.88.111.158:32378
+	user: admin
+	pass: R4WCrL04cvA8
+```
+
+![The Superset Frontend](superset.png "The Superset Frontend")
+
+
+# Install Airflow
+
+### Create namespace
+```
+	kc create namespace rebios-airflow
+```
+
+### Install Airflow
+```
+	helm repo add apache-airflow https://airflow.apache.org
+    helm upgrade --install airflow apache-airflow/airflow --namespace rebios-airflow 
+```
+
+### Check Airflow Instalation
+```
+	kc -n rebios-airflow get pods
+	
+NAME                                 READY   STATUS    RESTARTS   AGE
+airflow-postgresql-0                 1/1     Running   0          144m
+airflow-redis-0                      1/1     Running   0          144m
+airflow-scheduler-6ffd8d4cdb-84fx8   2/2     Running   0          144m
+airflow-statsd-769b757665-njvpt      1/1     Running   0          144m
+airflow-triggerer-0                  2/2     Running   0          144m
+airflow-webserver-5d88db779d-rr4hn   1/1     Running   0          144m
+airflow-worker-0                     2/2     Running   0          144m
+
+```
+### Access the Airflow Frontend
+```
+	http://34.228.176.207:32163
+	user: airflow
+	pass: airflow
+```
+
+![The Airflow Frontend](airflow.png "The Airflow Frontend")
+
+
 # Install HUE
 
 ### Create the namespace
@@ -3867,199 +4642,5 @@ file: service.yaml
 	pass: 9t3GuWCf4M3D
 ```
 
-# Install Datahub
+![The HUE Frontend](hue.png "The HUE Frontend")
 
-### Create namespace
-```
-	kc create namespace rebios-datahub
-```
-
-### Create secrets
-```
-kc create secret generic mysql-secrets --from-literal=mysql-root-password=datahub -n rebios-datahub
-kc create secret generic neo4j-secrets --from-literal=neo4j-password=datahub  -n rebios-datahub
-```
-### Create secrets
-```
-helm install -n rebios-datahub prerequisites datahub/datahub-prerequisites --values values-prerequisites.yaml
-```
-
-### Check Prerequisits 
-```
-kc -n rebios-datahub get pods 
-
-NAME                           READY   STATUS    RESTARTS   AGE
-elasticsearch-master-0         1/1     Running   0          94s
-prerequisites-kafka-broker-0   1/1     Running   0          94s
-prerequisites-neo4j-0          1/1     Running   0          94s
-prerequisites-zookeeper-0      1/1     Running   0          94s
-
-```
-
-### Install Datahub 
-```
-
-helm install datahub datahub/datahub -n rebios-datahub
-
-
-kc -n rebios-datahub get pods 
-
-NAME                                             READY   STATUS      RESTARTS   AGE
-datahub-acryl-datahub-actions-6d7dc8b789-w9f6g   1/1     Running     0          28m
-datahub-datahub-frontend-54fbc97fb-4zzsk         1/1     Running     0          28m
-datahub-datahub-gms-6cf6cf44d7-zhlkl             1/1     Running     0          28m
-datahub-elasticsearch-setup-job-txsln            0/1     Completed   0          35m
-datahub-kafka-setup-job-l9jwf                    0/1     Completed   0          35m
-datahub-mysql-setup-job-whzq5                    0/1     Completed   0          32m
-datahub-nocode-migration-job-nhkm8               0/1     Completed   0          28m
-datahub-system-update-hbgzd                      0/1     Completed   0          31m
-datahub-system-update-nonblk-xprps               0/1     Completed   0          25m
-elasticsearch-master-0                           1/1     Running     0          38m
-prerequisites-kafka-broker-0                     1/1     Running     0          38m
-prerequisites-mysql-0                            1/1     Running     0          38m
-prerequisites-zookeeper-0                        1/1     Running     0          38m
-
-```
-
-
-# Acess Datahub frontend 
-```
-	http://34.228.176.207:30349
-	user: datahub
-	pass: datahub
-```
-![The Welcome Datahub](datahub.jpg "The Welcome Datahub")
-
-# Install Superset
-
-### Create Namespace
-```
-	kc create namespace rebios-superset
-```
-
-### Create the volumes 
-file: pv.yaml
-```
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: superset-volume
-  labels:
-    type: local
-    app: rebios-superset
-spec:
-  storageClassName: manual
-  capacity:
-    storage: 5Gi
-  accessModes:
-    - ReadWriteMany
-  hostPath:
-    path: /data/superset
-```
-
-file: pv-redis.yaml
-```
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: redis-volume
-  labels:
-    type: local
-    app: rebios-superset
-spec:
-  storageClassName: manual
-  capacity:
-    storage: 5Gi
-  accessModes:
-    - ReadWriteMany
-  hostPath:
-    path: /data/redis
-```
-
-### Apply the Volumes
-```
-	kc apply -n rebios-superset -f pv.yaml
-	kc apply -n rebios-superset -f pv-redis.yaml
-	kc -n rebios-superset get pv
-```
-
-### Create the volume claims 
-file: pvc.yaml
-```
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: superset-data
-spec:
-  storageClassName: manual
-  volumeName: superset-volume
-  accessModes:
-    - ReadWriteMany
-  resources:
-    requests:
-      storage: 5Gi
-```
-
-file: pvc-redis.yaml
-```
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: redis-data
-spec:
-  storageClassName: manual
-  volumeName: redis-volume
-  accessModes:
-    - ReadWriteMany
-  resources:
-    requests:
-      storage: 5Gi
-```
-
-### Apply the Volume Claims
-```
-	kc apply -n rebios-superset -f pvc.yaml
-	kc apply -n rebios-superset -f pvc-redis.yaml
-	kc -n rebios-superset get pvc
-```
-
-
-kc apply -n rebios-superset -f configmap.yaml
-
-kc apply -n rebios-superset -f scripts.yaml
-
-sudo docker login --username jrosses --password DtrifNopan@111727
-
-sudo docker pull jrosses/rebios-superset:1.0.2
-
-kc apply -n rebios-superset -f bash.yaml
-
-kc -n rebios-superset get pods
-
-kc -n rebios-superset describe pods superset-bash-869dd8fd8d-hrvnc
-
-kc exec -it -n rebios-superset superset-bash-869dd8fd8d-hrvnc   -- /bin/bash
-
-kc -n rebios-superset delete statefulsets superset-redis
-
-kc apply -n rebios-superset -f redis.yaml
-
-kc -n rebios-superset get pods
-
-kc apply -n rebios-superset -f service-redis.yaml
-
-kc apply -n rebios-superset -f superset-beat.yaml
-
-kc -n rebios-superset get pods
-
-kc apply -n rebios-superset -f superset-worker.yaml
-
-kc -n rebios-superset get pods
-
-kc apply -n rebios-superset -f superset.yaml
-
-kc -n rebios-superset get pods
-
-kc apply -n rebios-superset -f service-superset.yaml
-
-kc apply -n rebios-superset -f ingress.yaml
