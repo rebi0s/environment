@@ -4612,7 +4612,7 @@ file: hue.yaml
 
 ### Create the Service
 file: service.yaml
-```yaml
+```
 	apiVersion: v1
 	kind: Service
 	metadata:
