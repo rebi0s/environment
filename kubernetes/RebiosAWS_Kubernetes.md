@@ -4612,8 +4612,7 @@ file: hue.yaml
 
 ### Create the Service
 file: service.yaml
-```
-<code><span style="color:red">
+``` yaml h1_lines "5 7 8 9"
 	apiVersion: v1
 	kind: Service
 	metadata:
@@ -4626,7 +4625,6 @@ file: service.yaml
 		  targetPort: 8888
 	  selector:
 		app: hue
-</span></code>
 ```
 
 ### Apply the service
