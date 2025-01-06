@@ -811,11 +811,11 @@ prerequisites-zookeeper-0                        1/1     Running     0          
 
 
 # Acess Datahub frontend 
-```
-	http://34.228.176.207:30349
-	user: datahub
-	pass: datahub
-```
+
+[The DatHub Frontend](http://34.228.176.207:30349)<br>
+user: <code> <b>datahub</b></code><br>
+pass: <code> <b>datahub</b></code><br>
+
 ![The Welcome Datahub](datahub.jpg "The Welcome Datahub")
 
 # Install Superset
