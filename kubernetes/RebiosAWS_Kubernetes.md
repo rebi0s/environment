@@ -162,7 +162,7 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 ```
 
 ### Create master volume claim
-[spark-pv.yaml](./spark/spark-pvc.yaml)
+[spark-pvc.yaml](./spark/spark-pvc.yaml)
 
 
 ### Apply master volume claim
@@ -174,7 +174,7 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 ### Create the master configmap
 
 ### Create master volume claim
-[spark-pv.yaml](./spark/spark-master-configmap.yaml)
+[spark-master-configmap.yaml](./spark/spark-master-configmap.yaml)
 
 
 
@@ -185,7 +185,7 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 ```
 
 ### Create the master deployment
-[spark-pv.yaml](./spark/spark-master-deployment.yaml)
+[spark-master-deployment.yaml](./spark/spark-master-deployment.yaml)
 
 
 ### Apply spark master deployment
@@ -197,7 +197,7 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 
 ### Create the master service
 
-[spark-pv.yaml](./spark/spark-master-service.yaml)
+[spark-master-service.yaml](./spark/spark-master-service.yaml)
 
 
 ### Apply spark master service
@@ -208,7 +208,7 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 
 ### Create the worker configmap
 
-[spark-pv.yaml](./spark/spark-worker-configmap.yaml)
+[spark-worker-configmap.yaml](./spark/spark-worker-configmap.yaml)
 
 
 ### Apply worker configmap
@@ -219,7 +219,7 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 
 ### Create the worker deployment
 
-[spark-pv.yaml](./spark/spark-worker-deployment.yaml)
+[spark-worker-deployment.yaml](./spark/spark-worker-deployment.yaml)
 
 
 ### Apply spark worker deployment
@@ -230,7 +230,7 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 ```
 
 ### Create the worker service
-[spark-pv.yaml](./spark/spark-worker-service.yaml)
+[spark-worker-service.yaml](./spark/spark-worker-service.yaml)
 
 
 ### Apply spark service
