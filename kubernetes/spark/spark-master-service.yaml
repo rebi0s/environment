@@ -1,0 +1,23 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: spark-master
+  namespace: rebios-spark
+spec:
+  type: NodePort
+  ports:
+    - name: webui
+      port: 7890
+      targetPort: 8080
+      nodePort: 30008
+    - name: spark
+      port: 7077
+      targetPort: 7077
+      nodePort: 30007
+    - name: hive
+      port: 10000
+      targetPort: 10000
+      nodePort: 30010
+  selector:
+    component: spark-master
+

@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rebios-spark-worker-secret
+  labels:
+    app: rebios-spark
+data:
+  SPARK_WORKLOAD: "worker"
+  SPARK_MASTER_PORT: ""
+  DEPENDENCIES: "org.postgresql:postgresql:42.6.0\
+                ,org.apache.iceberg:iceberg-bundled-guava:1.6.0\
+                ,org.apache.iceberg:iceberg-core:1.6.0\
+                ,org.apache.iceberg:iceberg-aws:1.6.0\
+                ,org.apache.iceberg:iceberg-aws-bundle:1.6.0\
+                ,org.apache.iceberg:iceberg-spark:1.6.0\
+                ,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.6.0\
+                ,org.apache.iceberg:iceberg-spark-extensions-3.5_2.12:1.6.0\
+                ,org.apache.iceberg:iceberg-hive-runtime:1.6.0\
+                ,org.apache.iceberg:iceberg-hive-metastore:1.6.0\
+                ,software.amazon.awssdk:sdk-core:2.20.120\
+                ,org.slf4j:slf4j-simple:2.0.16"
+  S3_URI: https://s3.amazonaws.com
+  S3_BUCKET: rebios-test-env/ 
+  AWS_REGION: us-east-2
+  POSTGRES_CONNECTION_STRING: jdbc:postgresql://XXXXXXXX/db_iceberg
+  POSTGRES_USER: role_iceberg
+  POSTGRES_PASSWORD: hNXz35UBRcAC
+  S3_FULL_URL: s3a://rebios-test-env/rebios
+  BIOS_CATALOG: bios
+  DEPENDENCIES: org.postgresql:postgresql:42.6.0,org.apache.iceberg:iceberg-bundled-guava:1.6.0,org.apache.iceberg:iceberg-core:1.6.0,org.apache.iceberg:iceberg-aws:1.6.0,org.apache.iceberg:iceberg-spark:1.6.0,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.6.0,org.apache.iceberg:iceberg-spark-extensions-3.5_2.12:1.6.0,org.apache.iceberg:iceberg-hive-runtime:1.6.0,org.apache.iceberg:iceberg-hive-metastore:1.6.0,org.slf4j:slf4j-simple:2.0.7,com.github.ben-manes.caffeine:caffeine:3.1.8
+  AWS_SDK_VERSION: "2.20.120"
+  AWS_MAVEN_GROUP: software.amazon.awssdk
+  IP: "127.0.0.1"
+  PORT: "10000"
+

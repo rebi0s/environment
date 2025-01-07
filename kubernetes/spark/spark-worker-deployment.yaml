@@ -1,0 +1,46 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: spark-worker
+  namespace: rebios-spark
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      component: spark-worker
+  template:
+    metadata:
+      labels:
+        component: spark-worker
+    spec:
+      containers:
+        - name: spark-worker
+          image: tabulario/spark-iceberg
+          envFrom:
+            - configMapRef:
+                name: rebios-spark-worker-secret
+          resources:
+            requests:
+              memory: "8Gi"
+            limits:
+              memory: "20Gi"
+          command:
+          - /bin/sh
+          - -c
+          - |
+            cp /tmp/postgresql-42.6.0.jar /opt/spark/jars
+            cd ./tmp
+            chmod +x start-spark-thrift.sh
+            start-spark-thrift.sh
+            tail -f /dev/null
+          ports:
+            - containerPort: 7077
+            - containerPort: 8080
+          volumeMounts:
+            - mountPath: /tmp
+              name: sparkdata
+      volumes:
+        - name: sparkdata
+          persistentVolumeClaim:
+            claimName: spark-volume-claim
+
