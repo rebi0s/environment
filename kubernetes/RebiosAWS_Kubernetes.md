@@ -14,83 +14,83 @@ The rebI0S architecture is based on the state of the practice in Big Data archit
 
 # Upgrade your system
 ```
-	sudo apt upgrade
+sudo apt upgrade
 ```
 
 ## Next, install a few prerequisite packages which let apt use packages over HTTPS:
 ```
-	sudo apt install apt-transport-https ca-certificates curl software-properties-common
-```	
+sudo apt install apt-transport-https ca-certificates curl software-properties-common
+```
 
 
 ## Then add the GPG key for the official Docker repository to your system:
 ```
-	curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 ```
 
 ## Add the Docker repository to APT sources:
 ``` 
-	sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
 ```
 
 ## Make sure you are about to install from the Docker repo instead of the default Ubuntu repo:
 ``` 
-	apt-cache policy docker-ce
-```	
+apt-cache policy docker-ce
+```
 
 ## Finally, install Docker:
 ```
-	sudo apt install docker-ce
+sudo apt install docker-ce
 ```
 
 ## Check that it’s running:
 ```
-	sudo systemctl status docker
-```	
+sudo systemctl status docker
+```
 
 ## Executing the Docker Command Without Sudo
 ```
-	sudo usermod -aG docker ${USER}
+sudo usermod -aG docker ${USER}
 ```
 
 
 # Install Microk8s on AWS
 ### install the MicroK8s using the following command
 ```
-	sudo snap install microk8s --classic
+sudo snap install microk8s --classic
 ```
 
 ### Next, you can check the status of the MicroK8s cluster by running the following command.
 ``` 
-	sudo microk8s status
+sudo microk8s status
 ```
 
 ### To avoid using microk8s as a prefix while running kubectl commands, you can add an alias of yuor preference if you don’t have an existing installation of kubectl.
 ### In this installation will be used "kc" as alias using the following command;
 ```
-	alias kc='sudo microk8s kubectl'
-```	
+alias kc='sudo microk8s kubectl'
+```
 
 ### Now, you can execute kubectl commands directly without the prefix.
 ```
-	kc get nodes
+kc get nodes
 ```
 
 ### In case you want to use native kubectl for executing the commands, copy the MicroK8s generated kubeconfig to the ~/.kube/config file by using the following command
 ```
-	mkdir ~/.kube
-	sudo microk8s kubectl config view --raw > ~/.kube/config
+mkdir ~/.kube
+sudo microk8s kubectl config view --raw > ~/.kube/config
 ```
 
 ### Now, you can use the native kubectl as well to run the commands.
 ```
-	kc get pods -A
+kc get pods -A
 ```
 
 ### Add user to microk8s group
 ```
-	sudo usermod -a -G microk8s ubuntu
-	sudo chown -R ubuntu ~/.kube
+sudo usermod -a -G microk8s ubuntu
+sudo chown -R ubuntu ~/.kube
 ```
 
 
@@ -102,43 +102,43 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 
 ### Connect to Existing Postgres Installation
 ```
-	psql --user=postgres --port=5432
-	psql -h localhost -U postgres --password -p 5432 
+psql --user=postgres --port=5432
+psql -h localhost -U postgres --password -p 5432 
 ```
 
 ### Create Database and Users
 ```
-	CREATE DATABASE db_iceberg;
-	CREATE DATABASE db_hue;
-	CREATE DATABASE db_superset;
-	CREATE DATABASE db_datahub;
-	UPDATE pg_database SET datallowconn = 'true' WHERE datname = 'db_iceberg';
-	UPDATE pg_database SET datallowconn = 'true' WHERE datname = 'db_hue';
-	UPDATE pg_database SET datallowconn = 'true' WHERE datname = 'db_superset';
-	UPDATE pg_database SET datallowconn = 'true' WHERE datname = 'db_datahub';
+CREATE DATABASE db_iceberg;
+CREATE DATABASE db_hue;
+CREATE DATABASE db_superset;
+CREATE DATABASE db_datahub;
+UPDATE pg_database SET datallowconn = 'true' WHERE datname = 'db_iceberg';
+UPDATE pg_database SET datallowconn = 'true' WHERE datname = 'db_hue';
+UPDATE pg_database SET datallowconn = 'true' WHERE datname = 'db_superset';
+UPDATE pg_database SET datallowconn = 'true' WHERE datname = 'db_datahub';
 
-	CREATE ROLE role_iceberg LOGIN PASSWORD 'XXXXXX';
-	CREATE ROLE role_hue LOGIN PASSWORD 'XXXXXX';
-	CREATE ROLE role_superset LOGIN PASSWORD 'XXXXX';
-	CREATE ROLE role_datahub LOGIN PASSWORD 'XXXXX';
+CREATE ROLE role_iceberg LOGIN PASSWORD 'XXXXXX';
+CREATE ROLE role_hue LOGIN PASSWORD 'XXXXXX';
+CREATE ROLE role_superset LOGIN PASSWORD 'XXXXX';
+CREATE ROLE role_datahub LOGIN PASSWORD 'XXXXX';
 
-	GRANT CONNECT ON DATABASE db_iceberg TO role_iceberg;
-	GRANT CONNECT ON DATABASE db_hue TO role_hue;
-	GRANT CONNECT ON DATABASE db_datahub TO role_datahub;
-	GRANT CONNECT ON DATABASE db_superset TO role_superset;
+GRANT CONNECT ON DATABASE db_iceberg TO role_iceberg;
+GRANT CONNECT ON DATABASE db_hue TO role_hue;
+GRANT CONNECT ON DATABASE db_datahub TO role_datahub;
+GRANT CONNECT ON DATABASE db_superset TO role_superset;
 
 
-	GRANT ALL privileges ON SCHEMA public TO role_hue;
-	GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO role_hue;
+GRANT ALL privileges ON SCHEMA public TO role_hue;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO role_hue;
 
-	GRANT ALL privileges ON SCHEMA public TO role_iceberg;
-	GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO role_iceberg;
+GRANT ALL privileges ON SCHEMA public TO role_iceberg;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO role_iceberg;
 
-	GRANT ALL privileges ON SCHEMA public TO role_superset;
-	GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO role_superset;
+GRANT ALL privileges ON SCHEMA public TO role_superset;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO role_superset;
 
-	GRANT ALL privileges ON SCHEMA public TO role_datahub;
-	GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO role_datahub;
+GRANT ALL privileges ON SCHEMA public TO role_datahub;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO role_datahub;
 ```
 
 
@@ -146,8 +146,8 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 
 ### Create the namespace
 ```
-	kc delete namespace rebios-spark
-	kc create namespace rebios-spark
+kc delete namespace rebios-spark
+kc create namespace rebios-spark
 ```
 
 
@@ -157,8 +157,8 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 
 ### Apply master volume
 ```
-	kc apply -n rebios-spark -f spark-pv.yaml
-	kc get pv
+kc apply -n rebios-spark -f spark-pv.yaml
+kc get pv
 ```
 
 ### Create master volume claim
@@ -167,8 +167,8 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 
 ### Apply master volume claim
 ```
-	kc apply -n rebios-spark -f spark-pvc.yaml
-	kc -n rebios-spark get pvc
+kc apply -n rebios-spark -f spark-pvc.yaml
+kc -n rebios-spark get pvc
 ```
 
 ### Create the master configmap
@@ -180,8 +180,8 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 
 ### Apply master configmap
 ```
-	kc apply -n rebios-spark -f spark-master-configmap.yaml
-	kc -n rebios-spark get configmap
+kc apply -n rebios-spark -f spark-master-configmap.yaml
+kc -n rebios-spark get configmap
 ```
 
 ### Create the master deployment
@@ -190,9 +190,9 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 
 ### Apply spark master deployment
 ```
-	kc apply -n rebios-spark -f spark-master-deployment.yaml
-	kc -n rebios-spark get deployments
-	kc -n rebios-spark get pods
+kc apply -n rebios-spark -f spark-master-deployment.yaml
+kc -n rebios-spark get deployments
+kc -n rebios-spark get pods
 ```
 
 ### Create the master service
@@ -213,8 +213,8 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 
 ### Apply worker configmap
 ```
-	kc apply -n rebios-spark -f spark-worker-configmap.yaml
-	kc -n rebios-spark get configmap
+kc apply -n rebios-spark -f spark-worker-configmap.yaml
+kc -n rebios-spark get configmap
 ```
 
 ### Create the worker deployment
@@ -224,9 +224,9 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 
 ### Apply spark worker deployment
 ```
-	kc apply -n rebios-spark -f spark-worker-deployment.yaml
-	kc -n rebios-spark get deployments
-	kc -n rebios-spark get pods
+kc apply -n rebios-spark -f spark-worker-deployment.yaml
+kc -n rebios-spark get deployments
+kc -n rebios-spark get pods
 ```
 
 ### Create the worker service
@@ -235,9 +235,9 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 
 ### Apply spark service
 ```
-	kc apply -n rebios-spark -f spark-worker-service.yaml
-	kc -n rebios-spark get svc
-	kc -n rebios-spark get pods
+kc apply -n rebios-spark -f spark-worker-service.yaml
+kc -n rebios-spark get svc
+kc -n rebios-spark get pods
 ```
 
 
@@ -245,7 +245,7 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 
 ### Create namespace
 ```
-	kc create namespace rebios-datahub
+kc create namespace rebios-datahub
 ```
 
 ### Create secrets
@@ -308,7 +308,7 @@ pass: <code> <b>datahub</b></code><br>
 
 ### Create Namespace
 ```
-	kc create namespace rebios-superset
+kc create namespace rebios-superset
 ```
 
 ### Create the volumes 
@@ -352,9 +352,9 @@ spec:
 
 ### Apply the Volumes
 ```
-	kc apply -n rebios-superset -f pv.yaml
-	kc apply -n rebios-superset -f pv-redis.yaml
-	kc -n rebios-superset get pv
+kc apply -n rebios-superset -f pv.yaml
+kc apply -n rebios-superset -f pv-redis.yaml
+kc -n rebios-superset get pv
 ```
 
 ### Create the volume claims 
@@ -392,9 +392,9 @@ spec:
 
 ### Apply the Volume Claims
 ```
-	kc apply -n rebios-superset -f pvc.yaml
-	kc apply -n rebios-superset -f pvc-redis.yaml
-	kc -n rebios-superset get pvc
+kc apply -n rebios-superset -f pvc.yaml
+kc apply -n rebios-superset -f pvc-redis.yaml
+kc -n rebios-superset get pvc
 ```
 
 ### Create the volume claims 
@@ -450,8 +450,8 @@ data:
 
 ### Apply the Confimap
 ```
-	kc apply -n rebios-superset -f configmap.yaml
-	kc -n rebios-superset get configmaps
+kc apply -n rebios-superset -f configmap.yaml
+kc -n rebios-superset get configmaps
 ```
 
 ### Create the Scripts
@@ -649,7 +649,7 @@ data:
 
 ### Apply the Scripts
 ```
-	kc apply -n rebios-superset -f scripts.yaml
+kc apply -n rebios-superset -f scripts.yaml
 ```
 
 ### Create the Bash
@@ -980,19 +980,19 @@ pass: <code> <b>R4WCrL04cvA8</b></code><br>
 
 ### Create namespace
 ```
-	kc create namespace rebios-airflow
+kc create namespace rebios-airflow
 ```
 
 ### Install Airflow
 ```
-	helm repo add apache-airflow https://airflow.apache.org
+helm repo add apache-airflow https://airflow.apache.org
     helm upgrade --install airflow apache-airflow/airflow --namespace rebios-airflow 
 ```
 
 ### Check Airflow Instalation
 ```
-	kc -n rebios-airflow get pods
-	
+kc -n rebios-airflow get pods
+
 NAME                                 READY   STATUS    RESTARTS   AGE
 airflow-postgresql-0                 1/1     Running   0          144m
 airflow-redis-0                      1/1     Running   0          144m
@@ -1016,8 +1016,8 @@ pass: <code> <b>airflow</b></code><br>
 
 ### Create the namespace
 ```
-	kc delete namespace rebios-jupyter
-	kc create namespace rebios-jupyter
+kc delete namespace rebios-jupyter
+kc create namespace rebios-jupyter
 ```
 
 ### Create the Values.yaml
@@ -1850,8 +1850,8 @@ pass: <code> <b>change.it!</b></code><br>
 
 ### Create the namespace
 ```
-	kc delete namespace rebios-hue
-	kc create namespace rebios-hue
+kc delete namespace rebios-hue
+kc create namespace rebios-hue
 ```
 
 ### Create the configmap
@@ -4875,79 +4875,79 @@ data:
 ```
 ### Apply configmap
 ```
-	kc apply -n rebios-hue -f cm.yaml
-	kc -n rebios-hue get configmap
+kc apply -n rebios-hue -f cm.yaml
+kc -n rebios-hue get configmap
 ```
 ### Create the Deployment
 file: hue.yaml
 
 ```
-	apiVersion: apps/v1
-	kind: Deployment
-	metadata:
-	  name: hue
-	spec:
-	  selector:
-		matchLabels:
-		  app: hue
-	  template:
-		metadata:
-		  labels:
-			app: hue
-		spec:
-		  containers:
-		  - name: hue
-			image: gethue/hue:20241127-140101
-			resources:
-			  limits:
-				memory: "1024Mi"
-				cpu: "500m"
-			ports:
-			- containerPort: 8888
-			volumeMounts:
-			- name: cm-hue
-			  mountPath: /usr/share/hue/desktop/conf/hue.ini
-			  subPath: hue.ini
-			- name: cm-hue
-			  mountPath: /etc/hue/conf/log.conf
-			  subPath: log.conf
-			- name: cm-hue
-			  mountPath: /usr/share/hue/desktop/libs/notebook/src/notebook/connectors/sql_alchemy.py
-			  subPath: sql_alchemy.py
-		  volumes:
-		  - name: cm-hue
-			configMap:
-			  name: cm-hue
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hue
+spec:
+  selector:
+matchLabels:
+  app: hue
+  template:
+metadata:
+  labels:
+app: hue
+spec:
+  containers:
+  - name: hue
+image: gethue/hue:20241127-140101
+resources:
+  limits:
+memory: "1024Mi"
+cpu: "500m"
+ports:
+- containerPort: 8888
+volumeMounts:
+- name: cm-hue
+  mountPath: /usr/share/hue/desktop/conf/hue.ini
+  subPath: hue.ini
+- name: cm-hue
+  mountPath: /etc/hue/conf/log.conf
+  subPath: log.conf
+- name: cm-hue
+  mountPath: /usr/share/hue/desktop/libs/notebook/src/notebook/connectors/sql_alchemy.py
+  subPath: sql_alchemy.py
+  volumes:
+  - name: cm-hue
+configMap:
+  name: cm-hue
 ```
 
 ### Apply the Deployment
 ```
-	kc apply -n rebios-hue -f hue.yaml
-	kc -n rebios-hue get deployment
-	kc -n rebios-hue get pods
+kc apply -n rebios-hue -f hue.yaml
+kc -n rebios-hue get deployment
+kc -n rebios-hue get pods
 ```
 
 ### Create the Service
 file: service.yaml
 ```
-	apiVersion: v1
-	kind: Service
-	metadata:
-	  name: hue
-	spec:
-	  type: NodePort
-	  ports:
-		- nodePort: 32088
-		  port: 8888
-		  targetPort: 8888
-	  selector:
-		app: hue
+apiVersion: v1
+kind: Service
+metadata:
+  name: hue
+spec:
+  type: NodePort
+  ports:
+- nodePort: 32088
+  port: 8888
+  targetPort: 8888
+  selector:
+app: hue
 ```
 
 ### Apply the service
 ```
-	kc apply -n rebios-hue -f service.yaml
-	kc -n rebios-hue get svc
+kc apply -n rebios-hue -f service.yaml
+kc -n rebios-hue get svc
 ```
 
 # Acess HUE 
