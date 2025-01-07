@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset-bash
+spec:
+  selector:
+    matchLabels:
+      app: superset-bash
+  template:
+    metadata:
+      labels:
+        app: superset-bash
+    spec:
+      containers:
+      - name: superset-bash
+        image: jrosses/rebios-superset:1.0.2
+        command: ["sleep", "infinity"]
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        envFrom:
+        - configMapRef:
+            name: superset-config
+        volumeMounts:
+        - name: superset-data
+          mountPath: /app/superset_home
+        - name: superset-scripts
+          mountPath: /app/scripts
+        securityContext:
+          runAsUser: 0
+      volumes:
+      - name: superset-data
+        persistentVolumeClaim:
+          claimName: superset-data
+      - name: superset-scripts
+        configMap:
+          name: superset-scripts
+        

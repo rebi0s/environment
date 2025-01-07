@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset-worker
+spec:
+  selector:
+    matchLabels:
+      app: superset-worker
+  template:
+    metadata:
+      labels:
+        app: superset-worker
+    spec:
+      containers:
+      - name: superset-worker
+        image: jrosses/rebios-superset:1.0.2
+        command: 
+        - /bin/bash
+        - -ec
+        - |
+          mkdir -p /app/docker
+          cp -rL /app/docker-scripts/* /app/docker/
+          chmod +x /app/docker/*.sh
+          /app/docker/docker-bootstrap.sh worker
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "500m"
+        envFrom:
+        - configMapRef:
+            name: superset-config
+        volumeMounts:
+        - name: superset-data
+          mountPath: /app/superset_home
+        - name: superset-scripts
+          mountPath: /app/docker-scripts
+        securityContext:
+          runAsUser: 0
+      volumes:
+      - name: superset-data
+        persistentVolumeClaim:
+          claimName: superset-data
+      - name: superset-scripts
+        configMap:
+          name: superset-scripts
+
+

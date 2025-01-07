@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset-beat
+spec:
+  selector:
+    matchLabels:
+      app: superset-beat
+  template:
+    metadata:
+      labels:
+        app: superset-beat
+    spec:
+      containers:
+      - name: superset-beat
+        image: jrosses/rebios-superset:1.0.2
+        command: 
+        - /bin/bash
+        - -ec
+        - |
+          mkdir -p /app/docker
+          cp -rL /app/docker-scripts/* /app/docker/
+          chmod +x /app/docker/*.sh
+          /app/docker/docker-bootstrap.sh beat
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        envFrom:
+        - configMapRef:
+            name: superset-config
+        volumeMounts:
+        - name: superset-data
+          mountPath: /app/superset_home
+        - name: superset-scripts
+          mountPath: /app/docker-scripts
+        securityContext:
+          runAsUser: 0
+      volumes:
+      - name: superset-data
+        persistentVolumeClaim:
+          claimName: superset-data
+      - name: superset-scripts
+        configMap:
+          name: superset-scripts
+
+

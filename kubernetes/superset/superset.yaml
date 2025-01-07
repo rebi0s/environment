@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset
+spec:
+  selector:
+    matchLabels:
+      app: superset
+  template:
+    metadata:
+      labels:
+        app: superset
+    spec:
+      # initContainers:
+      # - name: superset-init
+      #   image: registry.nuvem.unicamp.br/dssof/superset:1.0.2
+      #   command:
+      #   - /bin/bash
+      #   - -ec
+      #   - |
+      #     mkdir -p /app/docker
+      #     cp -rL /app/docker-scripts/* /app/docker/
+      #     ls -la /app/docker
+      #     chmod +x /app/docker/*.sh
+      #     /app/docker/docker-init.sh
+      #   envFrom: 
+      #   - configMapRef:
+      #       name: superset-config
+      #   volumeMounts:
+      #   - name: superset-data
+      #     mountPath: /app/superset_home
+      #   - name: superset-scripts
+      #     mountPath: /app/docker-scripts
+      #   securityContext:
+      #     runAsUser: 0
+      containers:
+      - name: superset
+        image: jrosses/rebios-superset:1.0.2
+        command: 
+        - /bin/bash
+        - -ec
+        - |
+          mkdir -p /app/docker
+          cp -rL /app/docker-scripts/* /app/docker/
+          chmod +x /app/docker/*.sh
+          /app/docker/docker-bootstrap.sh app-gunicorn
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "500m"
+        ports:
+        - containerPort: 8088
+        envFrom:
+        - configMapRef:
+            name: superset-config
+        volumeMounts:
+        - name: superset-data
+          mountPath: /app/superset_home
+        - name: superset-scripts
+          mountPath: /app/docker-scripts
+        securityContext:
+          runAsUser: 0
+      volumes:
+      - name: superset-data
+        persistentVolumeClaim:
+          claimName: superset-data
+      - name: superset-scripts
+        configMap:
+          name: superset-scripts
+
+

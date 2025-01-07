@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hue
+spec:
+  selector:
+    matchLabels:
+      app: hue
+  template:
+    metadata:
+      labels:
+        app: hue
+    spec:
+      containers:
+      - name: hue
+        image: gethue/hue:20241127-140101
+        resources:
+          limits:
+            memory: "1024Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 8888
+        volumeMounts:
+        - name: cm-hue
+          mountPath: /usr/share/hue/desktop/conf/hue.ini
+          subPath: hue.ini
+        - name: cm-hue
+          mountPath: /etc/hue/conf/log.conf
+          subPath: log.conf
+        - name: cm-hue
+          mountPath: /usr/share/hue/desktop/libs/notebook/src/notebook/connectors/sql_alchemy.py
+          subPath: sql_alchemy.py
+      volumes:
+      - name: cm-hue
+        configMap:
+          name: cm-hue
+

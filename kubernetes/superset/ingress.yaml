@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: superset-ingress
+  labels:
+    name: superset-ingress
+#  annotations:
+#    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  rules:
+  - host: ec2-54-88-111-158.compute-1.amazonaws.com
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: superset
+            port: 
+              number: 8088 
+
