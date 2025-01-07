@@ -150,28 +150,10 @@ The rebI0S architecture on AWS is comprised of the following components distribu
 	kc create namespace rebios-spark
 ```
 
-[a relative link](./spark/spark-pv.yaml)
+
 
 ### Create master volume
-file: spark-pv.yaml
-
-```
-	apiVersion: v1
-	kind: PersistentVolume
-	metadata:
-	  name: spark-volume
-	  labels:
-		type: local
-		app: rebios-spark
-	spec:
-	  storageClassName: manual
-	  capacity:
-		storage: 5Gi
-	  accessModes:
-		- ReadWriteMany
-	  hostPath:
-		path: /data/spark
-```
+[spark-pv.yaml](./spark/spark-pv.yaml)
 
 ### Apply master volume
 ```
@@ -180,24 +162,8 @@ file: spark-pv.yaml
 ```
 
 ### Create master volume claim
-file: spark-pvc.yaml
+[spark-pv.yaml](./spark/spark-pvc.yaml)
 
-```
-	apiVersion: v1
-	kind: PersistentVolumeClaim
-	metadata:
-	  name: spark-volume-claim
-	  labels:
-		app: rebios-spark
-	spec:
-	  storageClassName: manual
-	  volumeName: spark-volume
-	  accessModes:
-		- ReadWriteMany
-	  resources:
-		requests:
-		  storage: 5Gi
-```
 
 ### Apply master volume claim
 ```
@@ -206,47 +172,11 @@ file: spark-pvc.yaml
 ```
 
 ### Create the master configmap
-file: spark-master-configmap.yaml
 
-```
-	apiVersion: v1
-	kind: ConfigMap
-	metadata:
-	  name: rebios-spark-master-secret
-	  labels:
-		app: rebios-spark
-	data:
-	  SPARK_WORKLOAD: "master"
-	  SPARK_MASTER_PORT: ""
-	  DEPENDENCIES: "org.postgresql:postgresql:42.6.0\
-					,org.apache.iceberg:iceberg-bundled-guava:1.6.0\
-					,org.apache.iceberg:iceberg-core:1.6.0\
-					,org.apache.iceberg:iceberg-aws:1.6.0\
-					,org.apache.iceberg:iceberg-aws-bundle:1.6.0\
-					,org.apache.iceberg:iceberg-spark:1.6.0\
-					,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.6.0\
-					,org.apache.iceberg:iceberg-spark-extensions-3.5_2.12:1.6.0\
-					,org.apache.iceberg:iceberg-hive-runtime:1.6.0\
-					,org.apache.iceberg:iceberg-hive-metastore:1.6.0\
-					,software.amazon.awssdk:sdk-core:2.20.120\
-					,org.slf4j:slf4j-simple:2.0.16"
-	  S3_URI: https://s3.amazonaws.com
-	  S3_BUCKET: rebios-kube-env/
-	  AWS_ACCESS_KEY_ID: XXXXX
-	  AWS_SECRET_ACCESS_KEY: XXXXX
-	  AWS_REGION: us-east-1
-	  POSTGRES_CONNECTION_STRING: jdbc:postgresql://34.228.176.207:30695/db_iceberg
-	  POSTGRES_USER: role_iceberg
-	  POSTGRES_PASSWORD: XXXXX
-	  S3_FULL_URL: s3a://rebios-kube-env/rebios
-	  BIOS_CATALOG: bios
-	  DEPENDENCIES: org.postgresql:postgresql:42.6.0,org.apache.iceberg:iceberg-bundled-guava:1.6.0,org.apache.iceberg:iceberg-core:1.6.0,org.apache.iceberg:iceberg-aws:1.6.0,org.apache.iceberg:iceberg-spark:1.6.0,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.6.0,org.apache.iceberg:iceberg-spark-extensions-3.5_2.12:1.6.0,org.apache.iceberg:iceberg-hive-runtime:1.6.0,org.apache.iceberg:iceberg-hive-metastore:1.6.0,org.slf4j:slf4j-simple:2.0.7,com.github.ben-manes.caffeine:caffeine:3.1.8
-	  AWS_SDK_VERSION: "2.20.120"
-	  AWS_MAVEN_GROUP: software.amazon.awssdk
-	  IP: "127.0.0.1"
-	  PORT: "10000"
+### Create master volume claim
+[spark-pv.yaml](./spark/spark-master-configmap.yaml)
 
-```
+
 
 ### Apply master configmap
 ```
@@ -255,51 +185,8 @@ file: spark-master-configmap.yaml
 ```
 
 ### Create the master deployment
-file: spark-master-deployment.yaml
+[spark-pv.yaml](./spark/spark-master-deployment.yaml)
 
-```
-	kind: Deployment
-	apiVersion: apps/v1
-	metadata:
-	  name: spark-master
-	  namespace: rebios-spark
-	spec:
-	  replicas: 1
-	  selector:
-		matchLabels:
-		  component: spark-master
-	  template:
-		metadata:
-		  labels:
-			component: spark-master
-		spec:
-		  containers:
-			- name: spark-master
-			  image: tabulario/spark-iceberg
-			  envFrom:
-				- configMapRef:
-					name: rebios-spark-master-secret
-			  resources:
-				requests:
-				  memory: "6Gi"
-				limits:
-				  memory: "8Gi"
-			  command:
-			  - /bin/sh
-			  - -c
-			  - |
-				tail -f /dev/null
-			  ports:
-				- containerPort: 7077
-				- containerPort: 8080
-			  volumeMounts:
-				- mountPath: /tmp
-				  name: sparkdata
-		  volumes:
-			- name: sparkdata
-			  persistentVolumeClaim:
-				claimName: spark-volume-claim
-```
 
 ### Apply spark master deployment
 ```
@@ -309,32 +196,9 @@ file: spark-master-deployment.yaml
 ```
 
 ### Create the master service
-file: spark-master-service.yaml
 
-```
-	kind: Service
-	apiVersion: v1
-	metadata:
-	  name: spark-master
-	  namespace: rebios-spark
-	spec:
-	  type: NodePort
-	  ports:
-		- name: webui
-		  port: 7890
-		  targetPort: 8080
-		  nodePort: 30008
-		- name: spark
-		  port: 7077
-		  targetPort: 7077
-		  nodePort: 30007
-		- name: hive
-		  port: 10000
-		  targetPort: 10000
-		  nodePort: 30010
-	  selector:
-		component: spark-master
-```
+[spark-pv.yaml](./spark/spark-master-service.yaml)
+
 
 ### Apply spark master service
 ```
@@ -342,48 +206,10 @@ file: spark-master-service.yaml
     kc -n rebios-spark get services
 ```
 
-
 ### Create the worker configmap
-file: spark-worker-configmap.yaml
 
-```
-    apiVersion: v1
-	kind: ConfigMap
-	metadata:
-	  name: rebios-spark-master-secret
-	  labels:
-		app: rebios-spark
-	data:
-	  SPARK_WORKLOAD: "worker"
-	  SPARK_MASTER_PORT: ""
-	  DEPENDENCIES: "org.postgresql:postgresql:42.6.0\
-					,org.apache.iceberg:iceberg-bundled-guava:1.6.0\
-					,org.apache.iceberg:iceberg-core:1.6.0\
-					,org.apache.iceberg:iceberg-aws:1.6.0\
-					,org.apache.iceberg:iceberg-aws-bundle:1.6.0\
-					,org.apache.iceberg:iceberg-spark:1.6.0\
-					,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.6.0\
-					,org.apache.iceberg:iceberg-spark-extensions-3.5_2.12:1.6.0\
-					,org.apache.iceberg:iceberg-hive-runtime:1.6.0\
-					,org.apache.iceberg:iceberg-hive-metastore:1.6.0\
-					,software.amazon.awssdk:sdk-core:2.20.120\
-					,org.slf4j:slf4j-simple:2.0.16"
-	  S3_URI: https://s3.amazonaws.com
-	  S3_BUCKET: rebios-kube-env/
-	  AWS_ACCESS_KEY_ID: XXXXX
-	  AWS_SECRET_ACCESS_KEY: XXXXX
-	  AWS_REGION: us-east-1
-	  POSTGRES_CONNECTION_STRING: jdbc:postgresql://34.228.176.207:30695/db_iceberg
-	  POSTGRES_USER: role_iceberg
-	  POSTGRES_PASSWORD: XXXXX
-	  S3_FULL_URL: s3a://rebios-kube-env/rebios
-	  BIOS_CATALOG: bios
-	  DEPENDENCIES: org.postgresql:postgresql:42.6.0,org.apache.iceberg:iceberg-bundled-guava:1.6.0,org.apache.iceberg:iceberg-core:1.6.0,org.apache.iceberg:iceberg-aws:1.6.0,org.apache.iceberg:iceberg-spark:1.6.0,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.6.0,org.apache.iceberg:iceberg-spark-extensions-3.5_2.12:1.6.0,org.apache.iceberg:iceberg-hive-runtime:1.6.0,org.apache.iceberg:iceberg-hive-metastore:1.6.0,org.slf4j:slf4j-simple:2.0.7,com.github.ben-manes.caffeine:caffeine:3.1.8
-	  AWS_SDK_VERSION: "2.20.120"
-	  AWS_MAVEN_GROUP: software.amazon.awssdk
-	  IP: "127.0.0.1"
-	  PORT: "10000"
-```
+[spark-pv.yaml](./spark/spark-worker-configmap.yaml)
+
 
 ### Apply worker configmap
 ```
@@ -392,51 +218,9 @@ file: spark-worker-configmap.yaml
 ```
 
 ### Create the worker deployment
-file: spark-worker-deployment.yaml
 
-```
-	kind: Deployment
-	apiVersion: apps/v1
-	metadata:
-	  name: spark-worker
-	  namespace: rebios-spark
-	spec:
-	  replicas: 2
-	  selector:
-		matchLabels:
-		  component: spark-worker
-	  template:
-		metadata:
-		  labels:
-			component: spark-worker
-		spec:
-		  containers:
-			- name: spark-worker
-			  image: tabulario/spark-iceberg
-			  envFrom:
-				- configMapRef:
-					name: rebios-spark-worker-secret
-			  resources:
-				requests:
-				  memory: "3Gi"
-				limits:
-				  memory: "4Gi"
-			  command:
-			  - /bin/sh
-			  - -c
-			  - |
-				tail -f /dev/null
-			  ports:
-				- containerPort: 7077
-				- containerPort: 8080
-			  volumeMounts:
-				- mountPath: /tmp
-				  name: sparkdata
-		  volumes:
-			- name: sparkdata
-			  persistentVolumeClaim:
-				claimName: spark-volume-claim
-```
+[spark-pv.yaml](./spark/spark-worker-deployment.yaml)
+
 
 ### Apply spark worker deployment
 ```
@@ -446,32 +230,8 @@ file: spark-worker-deployment.yaml
 ```
 
 ### Create the worker service
-file: spark-worker-service.yaml
+[spark-pv.yaml](./spark/spark-worker-service.yaml)
 
-```
-	kind: Service
-	apiVersion: v1
-	metadata:
-	  name: spark-worker
-	  namespace: rebios-spark
-	spec:
-	  type: NodePort
-	  ports:
-		- name: webui
-		  port: 7890
-		  targetPort: 8080
-		  nodePort: 30011
-		- name: spark
-		  port: 7077
-		  targetPort: 7077
-		  nodePort: 30012
-		- name: hive
-		  port: 10000
-		  targetPort: 10000
-		  nodePort: 30013
-	  selector:
-		component: spark-worker
-```
 
 ### Apply spark service
 ```
