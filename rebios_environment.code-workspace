@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "../../omop_cdm/sampleData/mimic-iv-demo-data-in-the-omop-common-data-model-0.9/1_omop_data_csv"
+		},
+		{
+			"path": "../CNES/BASE_DE_DADOS_CNES_202404"
+		}
+	],
+	"settings": {}
+}
