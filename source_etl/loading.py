@@ -108,7 +108,6 @@ if sys.argv[1] == 'VOCAB_OMOP':
 # usage:
 #  spark-submit loading.py DATASUS -city /path_to_folder_with_cities
 #  spark-submit loading.py DATASUS -care /path_to_folder_with_care_sites
-#  spark-submit loading.py DATASUS -idc10 /path_to_folder_with_icd10
 #  
 #*************************
 
@@ -119,7 +118,6 @@ if sys.argv[1] == 'DATASUS':
 			logger.error("Usage: ")
 			logger.error("   spark-submit loading.py DATASUS -city /path_to_folder_with_cities file_name_with_cities")
 			logger.error("   spark-submit loading.py DATASUS -care /path_to_folder_with_care_sites file_name_with_care_sites")
-			logger.error("   spark-submit loading.py DATASUS -idc10 /path_to_folder_with_icd10")
 			sys.exit(-1)
 
 		logger.info("Loading external data from DATASUS to OMOP database.")
@@ -2542,7 +2540,7 @@ if sys.argv[1] == 'SIM':
 			campos.append({"expr": "FSql.lit(None).cast(TimestampType())", "alias": "investigation_conclusion_date"})
 
 		if any(field.name == "TPMORTEOCO" for field in df_sim.schema.fields):
-			campos.append({"expr": "df_sim.TPOBITOCOR.cast(IntegerType())", "alias": "death_occurrence_time_2012"})
+			campos.append({"expr": "df_sim.TPMORTEOCO.cast(IntegerType())", "alias": "death_occurrence_time_2012"})
 		else:
 			campos.append({"expr": "FSql.lit(None).cast(IntegerType())", "alias": "death_occurrence_time_2012"})
 
