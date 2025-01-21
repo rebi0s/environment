@@ -497,7 +497,7 @@ kc -n rebios-hue get svc
 
 ## Database Problems
 
-### The backup area for the Rebios project in a S3 reposity:
+### The backup area for the Rebios project in a S3 repository:
 
 s3://rebios-test-env/rebios-backup/ 
 
@@ -564,7 +564,7 @@ kc -n rebios-superset cp supserset_monthYYYY.db superset-7db76db494-cdzzm://app/
 
 ### To recover a deployment first inspect the namespace to check the deployment status
 
-### This exemple using the Superset:
+### This example using the Superset:
 
 ```
 kc -n rebios-superset get deployments
