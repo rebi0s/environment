@@ -493,3 +493,108 @@ kc -n rebios-hue get svc
 
 ![The HUE Frontend](hue.jpg "The HUE Frontend")
 
+# Troubleshooting
+
+## Database Problems
+
+### The backup area for the Rebios project in a S3 reposity:
+
+s3://rebios-test-env/rebios-backup/ 
+
+### The current backups files are listed below:
+
+Icerberg: s3://rebios-test-env/rebios-backup/db_iceberg_monthYYYY.dump 
+Hue:      s3://rebios-test-env/rebios-backup/db_hue_monthYYYY.dump 
+Superset: s3://rebios-test-env/rebios-backup/supserset_monthYYYY.db
+
+# Recover Databases Icerberg and Hue 
+
+### Connect to Existing Postgres Installation
+```
+psql --user=postgres --port=5432
+psql -h localhost -U postgres --password -p 5432 
+```
+
+### Create Database and Users
+```
+CREATE DATABASE db_iceberg;
+CREATE DATABASE db_hue;
+
+UPDATE pg_database SET datallowconn = 'true' WHERE datname = 'db_iceberg';
+UPDATE pg_database SET datallowconn = 'true' WHERE datname = 'db_hue';
+
+CREATE ROLE role_iceberg LOGIN PASSWORD 'XXXXXX';
+CREATE ROLE role_hue LOGIN PASSWORD 'XXXXXX';
+
+GRANT CONNECT ON DATABASE db_iceberg TO role_iceberg;
+GRANT CONNECT ON DATABASE db_hue TO role_hue;
+
+GRANT ALL privileges ON SCHEMA public TO role_hue;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO role_hue;
+
+GRANT ALL privileges ON SCHEMA public TO role_iceberg;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO role_iceberg;
+
+pg_restore  --dbname=db_iceberg --user=postgres --port=5432 --clean -d db_iceberg /tmp/db_iceberg_monthYYYY.dump
+pg_restore  --dbname=db_hue --user=postgres --port=5432 --clean -d db_hue /tmp/db_hue_monthYYYY.dump
+
+```
+
+# Recover the Superset Database 
+
+The Superset database nust be copied into the superset web pod.
+
+On this exemple
+
+kc -n rebios-supsert get pods 
+
+NAME                               READY   STATUS    RESTARTS   AGE
+superset-7db76db494-cdzzm          1/1     Running   0          14d
+
+Copy file:
+
+kc -n rebios-superset cp supserset_monthYYYY.db superset-7db76db494-cdzzm://app/supeset_home/supserset.db 
+
+# Recover Deployments failed
+
+### To recover a deployment first inspect the namespace to check the deployment status?
+### This exemple using the Superset:
+
+```
+kc -n rebios-superset get deployments
+```
+
+NAME              READY   UP-TO-DATE   AVAILABLE   AGE
+superset          1/1     1            1           14d
+superset-bash     1/1     1            1           21d
+superset-beat     1/1     1            1           21d
+superset-worker   1/1     1            1           21d
+
+### Recreate the Superset Deployment 
+
+```
+kc -n rebios-superset delete deployment superset
+kc apply -n rebios-superset -f superset.yaml
+kc -n rebios-superset get pods
+```
+
+### Recreate the Spark Deployment 
+
+```
+kc -n rebios-spark get deployments
+```
+NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+spark-master   1/1     1            1           13d
+spark-worker   2/2     2            2           13d
+
+```
+kc -n rebios-spark delete deployment spark-master
+kc apply -n rebios-spark -f spark-master-deployment.yaml
+kc -n rebios-spark get pods
+```
+
+
+
+
+
+  
