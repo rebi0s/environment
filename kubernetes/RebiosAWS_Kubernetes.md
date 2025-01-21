@@ -542,33 +542,39 @@ pg_restore  --dbname=db_hue --user=postgres --port=5432 --clean -d db_hue /tmp/d
 
 # Recover the Superset Database 
 
-The Superset database nust be copied into the superset web pod.
+### The Superset database nust be copied into the superset web pod.
 
-On this exemple
 
+### On this example:
+
+```
 kc -n rebios-supsert get pods 
 
 NAME                               READY   STATUS    RESTARTS   AGE
 superset-7db76db494-cdzzm          1/1     Running   0          14d
+```
 
-Copy file:
+### Copy file:
 
+```
 kc -n rebios-superset cp supserset_monthYYYY.db superset-7db76db494-cdzzm://app/supeset_home/supserset.db 
+```
 
 # Recover Deployments failed
 
-### To recover a deployment first inspect the namespace to check the deployment status?
+### To recover a deployment first inspect the namespace to check the deployment status
+
 ### This exemple using the Superset:
 
 ```
 kc -n rebios-superset get deployments
-```
 
 NAME              READY   UP-TO-DATE   AVAILABLE   AGE
 superset          1/1     1            1           14d
 superset-bash     1/1     1            1           21d
 superset-beat     1/1     1            1           21d
 superset-worker   1/1     1            1           21d
+```
 
 ### Recreate the Superset Deployment 
 
@@ -582,12 +588,11 @@ kc -n rebios-superset get pods
 
 ```
 kc -n rebios-spark get deployments
-```
+
 NAME           READY   UP-TO-DATE   AVAILABLE   AGE
 spark-master   1/1     1            1           13d
 spark-worker   2/2     2            2           13d
 
-```
 kc -n rebios-spark delete deployment spark-master
 kc apply -n rebios-spark -f spark-master-deployment.yaml
 kc -n rebios-spark get pods
