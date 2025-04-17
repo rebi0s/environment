@@ -1,5 +1,5 @@
 # Configuring Rebios on Kubernetes
-This file describes the steps necessary steps to configure the Rebios on Kubernetes using a EC2 instance
+This file describes the necessary steps to configure the Rebios on Kubernetes using a EC2 instance
 
 # reBI0S Architecture
 
